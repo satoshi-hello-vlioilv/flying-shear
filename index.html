@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>フライングシャーライン 3Dシミュレータ｜アルミ板 走間切断工程</title>
+<style>
+  :root{
+    --bg:#12161c; --panel:#1a2029; --panel2:#20293a; --line:#2e3a4a;
+    --tx:#e8eef5; --tx2:#9db0c4; --acc:#e2a13a; --acc2:#4da3ff; --ok:#5ecb8a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--tx);
+    font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",Meiryo,sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  header{
+    padding:10px 16px; border-bottom:1px solid var(--line);
+    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; background:var(--panel);
+  }
+  header h1{font-size:17px; font-weight:700; letter-spacing:.02em;}
+  header .sub{font-size:12px; color:var(--tx2);}
+  #app{flex:1; display:flex; min-height:0;}
+  #view{flex:1; position:relative; min-width:0;}
+  canvas#c{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none;}
+  canvas#c.dragging{cursor:grabbing;}
+
+  /* ---- HUD ---- */
+  #phasebar{
+    position:absolute; top:10px; left:50%; transform:translateX(-50%);
+    display:flex; gap:6px; flex-wrap:wrap; justify-content:center; pointer-events:none; max-width:92%;
+  }
+  .chip{
+    font-size:12px; padding:5px 10px; border-radius:999px; white-space:nowrap;
+    background:rgba(20,26,34,.78); border:1px solid var(--line); color:var(--tx2);
+    transition:all .15s;
+  }
+  .chip.on{background:var(--acc); border-color:var(--acc); color:#20180a; font-weight:700;}
+  #stats{
+    position:absolute; left:10px; top:10px; font-size:12px; line-height:1.75;
+    background:rgba(20,26,34,.8); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; min-width:196px; pointer-events:none;
+  }
+  #stats b{font-weight:600; color:var(--tx2); font-weight:400;}
+  #stats .v{color:var(--tx); font-variant-numeric:tabular-nums; float:right; margin-left:14px;}
+  #measbarWrap{height:6px; background:#2a3442; border-radius:3px; overflow:hidden; margin-top:2px;}
+  #measbar{height:100%; width:0%; background:var(--acc2); border-radius:3px;}
+  #hint{
+    position:absolute; left:10px; bottom:10px; font-size:11px; color:var(--tx2);
+    background:rgba(20,26,34,.7); border:1px solid var(--line); border-radius:8px; padding:5px 9px; pointer-events:none;
+  }
+
+  /* ---- side panel ---- */
+  #panel{
+    width:296px; flex:none; background:var(--panel); border-left:1px solid var(--line);
+    overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:14px;
+  }
+  .sec h2{font-size:12px; color:var(--tx2); font-weight:600; letter-spacing:.08em; margin-bottom:8px;}
+  .row{display:flex; gap:8px; align-items:center;}
+  button{
+    font:inherit; font-size:13px; color:var(--tx); background:var(--panel2);
+    border:1px solid var(--line); border-radius:8px; padding:7px 10px; cursor:pointer;
+  }
+  button:hover{border-color:#4a5a70;}
+  button.primary{background:var(--acc); border-color:var(--acc); color:#20180a; font-weight:700;}
+  button.mini{padding:5px 9px; font-size:12px;}
+  button.sel{background:var(--acc2); border-color:var(--acc2); color:#0b1826; font-weight:700;}
+  .grow{flex:1;}
+  label.slider{display:block; font-size:12px; color:var(--tx2); margin-top:8px;}
+  label.slider .val{float:right; color:var(--tx); font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%; accent-color:var(--acc); margin-top:4px;}
+  label.chk{display:flex; gap:8px; align-items:center; font-size:13px; margin-top:6px; cursor:pointer;}
+  input[type=checkbox]{accent-color:var(--acc); width:15px; height:15px;}
+  .legend{list-style:none; font-size:12px; display:flex; flex-direction:column; gap:7px;}
+  .legend li{display:flex; gap:8px; align-items:flex-start; line-height:1.45;}
+  .dot{width:10px; height:10px; border-radius:3px; flex:none; margin-top:3px;}
+  .legend b{color:var(--tx); font-weight:600;}
+  .legend span{color:var(--tx2);}
+  details{border:1px solid var(--line); border-radius:10px; background:var(--panel2);}
+  details summary{cursor:pointer; padding:9px 12px; font-size:13px; font-weight:600;}
+  details .body{padding:0 12px 12px; font-size:12px; line-height:1.8; color:var(--tx2);}
+  details .body b{color:var(--tx);}
+  details .body ol{padding-left:18px; margin:6px 0;}
+  .note{font-size:11px; color:#7a8ca0;}
+
+  @media (max-width: 860px){
+    #app{flex-direction:column;}
+    #panel{width:100%; max-height:42%; border-left:none; border-top:1px solid var(--line);}
+    #stats{font-size:11px; min-width:170px;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>フライングシャーライン 3Dシミュレータ</h1>
+  <span class="sub">アルミニウム板 連続切断工程（走間剪断）の動作モデル</span>
+</header>
+
+<div id="app">
+  <div id="view">
+    <canvas id="c"></canvas>
+
+    <div id="phasebar">
+      <span class="chip" id="ph0">① 材料送り（測長）</span>
+      <span class="chip" id="ph1">② 同期加速</span>
+      <span class="chip" id="ph2">③ 走間切断</span>
+      <span class="chip" id="ph3">④ 復帰</span>
+    </div>
+
+    <div id="stats">
+      <div><b>ライン速度</b><span class="v" id="stLine">–</span></div>
+      <div><b>キャリッジ速度</b><span class="v" id="stCar">–</span></div>
+      <div><b>速度同期率</b><span class="v" id="stSync">–</span></div>
+      <div><b>測長 / 設定長</b><span class="v" id="stMeas">–</span></div>
+      <div id="measbarWrap"><div id="measbar"></div></div>
+      <div><b>切断枚数</b><span class="v" id="stCount">0 枚</span></div>
+      <div><b>直前の切断長</b><span class="v" id="stLast">–</span></div>
+      <div><b>パレット搬出</b><span class="v" id="stPallet">0 回</span></div>
+    </div>
+
+    <div id="hint">ドラッグ：回転 ／ ホイール・ピンチ：ズーム ／ ダブルクリック：全体表示</div>
+  </div>
+
+  <aside id="panel">
+    <div class="sec">
+      <h2>運転操作</h2>
+      <div class="row">
+        <button id="btnRun" class="primary grow">⏸ 一時停止</button>
+        <button id="btnReset">↺ リセット</button>
+      </div>
+      <label class="slider">ライン速度 <span class="val" id="valSpeed">90 m/min</span>
+        <input type="range" id="rngSpeed" min="30" max="150" step="6" value="90">
+      </label>
+      <label class="slider">切断長さ <span class="val" id="valLen">3.0 m</span>
+        <input type="range" id="rngLen" min="2.0" max="4.5" step="0.25" value="3.0">
+      </label>
+      <label class="slider">アニメーション速度</label>
+      <div class="row" style="margin-top:4px">
+        <button class="mini grow ts" data-ts="0.25">0.25×</button>
+        <button class="mini grow ts" data-ts="0.5">0.5×</button>
+        <button class="mini grow ts sel" data-ts="1">1×</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>視点</h2>
+      <div class="row" style="flex-wrap:wrap">
+        <button class="mini vw sel" data-view="all">全体</button>
+        <button class="mini vw" data-view="shear">シャー部</button>
+        <button class="mini vw" data-view="out">搬出・積載</button>
+        <button class="mini vw" data-view="top">上面</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="chkLabels" checked>機器ラベルを表示</label>
+      <label class="chk"><input type="checkbox" id="chkRotate">カメラ自動回転</label>
+    </div>
+
+    <div class="sec">
+      <h2>ライン構成（材料の流れ順）</h2>
+      <ul class="legend">
+        <li><span class="dot" style="background:#96a4b4"></span><div><b>① アンコイラー</b><br><span>コイル状のアルミ材を巻き出す</span></div></li>
+        <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のロールで巻きぐせ・反りを矯正</span></div></li>
+        <li><span class="dot" style="background:#5b7186"></span><div><b>③ 測長ピンチロール</b><br><span>板に密着して送り長さを計測</span></div></li>
+        <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同じ速度で走行しながら切断（走間剪断）</span></div></li>
+        <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインより高速で搬送し、切板間にギャップを作る</span></div></li>
+        <li><span class="dot" style="background:#4a8a86"></span><div><b>⑥ スタッカー</b><br><span>定位置ストッパで停止させ積載（8枚で搬出）</span></div></li>
+      </ul>
+    </div>
+
+    <div class="sec">
+      <details open>
+        <summary>解説：フライングシャーとは</summary>
+        <div class="body">
+          <p><b>フライングシャー（走間剪断機）</b>は、連続して流れてくる板を<b>ラインを止めずに</b>定尺切断する装置です。切断の瞬間、刃を載せたキャリッジが板と同じ速度で走行することで、板に対する刃の相対速度がゼロになり、直角できれいな切り口が得られます。</p>
+          <ol>
+            <li>測長ロールで送り長さを計測</li>
+            <li>目標長さの直前でキャリッジが加速し、板速度に同期</li>
+            <li>同期を保ったまま上刃が降下 → 切断</li>
+            <li>刃が上昇後、キャリッジは減速・後退して原位置へ復帰</li>
+          </ol>
+          <p>切断された板は高速のランアウトコンベアで前の板から引き離され（ギャップ形成）、スタッカーで積み重ねられます。</p>
+          <p class="note">※板厚・寸法・速度は、動作を見やすくするため誇張しています（1目盛=1m相当）。</p>
+        </div>
+      </details>
+    </div>
+  </aside>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+   フライングシャーライン 3Dシミュレータ
+   依存ライブラリなし：Canvas2D + ペインタ法による簡易3D描画
+   ========================================================= */
+
+/* ---------- 定数（1単位 ≒ 1m） ---------- */
+const PL   = 1.60;   // パスライン高さ（板の上面）
+const TH   = 0.06;   // 板厚（誇張）
+const HW   = 1.10;   // 板半幅（幅2.2m）
+const XH   = -2.50;  // シャーキャリッジ原位置
+const ACC  = 6.0;    // キャリッジ加減速度
+const VR   = 2.2;    // 復帰速度上限
+const SETTLE  = 0.12; // 同期後の整定時間
+const BLADE_T = 0.22; // 刃の下降(=上昇)時間
+const XSTOP   = 18.5; // スタッカーのストッパ位置
+const PALLET_TOP = 0.72;
+const PILE_MAX   = 8;
+const COIL_X = -16, COIL_CY = 3.0, COIL_LEN = 2.6;
+
+/* ---------- 色 ---------- */
+const C = {
+  floor:[40,45,53], aisle:[52,59,69], hazard:[176,146,58],
+  steel:[96,114,132], steelD:[62,76,92], steelL:[150,163,176],
+  roller:[172,182,194], rollMark:[88,98,112],
+  alu:[216,222,230], aluFresh:[232,238,246],
+  yellow:[226,161,58], orange:[222,120,50], blade:[210,220,232],
+  levBlue:[74,110,160], convBlue:[63,110,168], teal:[74,138,134],
+  pallet:[126,104,72], dark:[36,42,50]
+};
+
+/* ---------- シミュレーション状態 ---------- */
+const S = {
+  running:true, timeScale:1,
+  v:1.5,            // ライン速度 [m/s]（90 m/min）
+  CL:3.0,           // 切断長 [m]
+  phase:'FEED',     // FEED → SYNC → CUT → RETURN
+  xF:-3,            // 板先端位置
+  lastCutRef:-3,    // 測長基準（直前の切断位置）
+  xc:XH, vc:0,      // キャリッジ位置・速度
+  blade:0,          // 刃位置 0=上, 1=下
+  bladeT:0, settleT:0, cutDone:false,
+  sheets:[], pile:[], flashes:[],
+  cutCount:0, lastLen:0, palletCount:0, palletAnim:null,
+  coilR:1.45, coilPh:0, levPh:0, feedPh:0, convPh:0
+};
+
+function resetSim(){
+  Object.assign(S,{
+    phase:'FEED', xF:-3, lastCutRef:-3, xc:XH, vc:0,
+    blade:0, bladeT:0, settleT:0, cutDone:false,
+    sheets:[], pile:[], flashes:[],
+    cutCount:0, lastLen:0, palletCount:0, palletAnim:null,
+    coilR:1.45, coilPh:0, levPh:0, feedPh:0, convPh:0
+  });
+}
+
+/* ---------- 状態遷移（1ステップ） ---------- */
+function step(dt){
+  const v = S.v;
+  const vConv = Math.max(v*1.8, v+1.0);       // コンベア速度（ギャップ形成）
+
+  /* 材料送り・回転体 */
+  S.xF += v*dt;
+  S.coilPh += (v/S.coilR)*dt;
+  S.coilR = Math.max(0.8, S.coilR - v*TH/(2*Math.PI*S.coilR)*dt*4); // 見た目用に速め
+  if(S.coilR <= 0.8) S.coilR = 1.45;          // コイル交換
+  S.levPh  += (v/0.22)*dt;
+  S.feedPh += (v/0.35)*dt;
+  S.convPh += (vConv/0.15)*dt;
+
+  /* キャリッジ状態機械 */
+  switch(S.phase){
+    case 'FEED':{
+      // 切断予測：同期完了→整定→刃下降 までの移動量から起動タイミングを逆算
+      const ts = v/ACC, ds = v*v/(2*ACC);
+      const T  = ts + SETTLE + BLADE_T;
+      const D  = ds + v*(SETTLE + BLADE_T);
+      const trigger = S.CL + XH + D - v*T;
+      if(S.xF >= trigger){ S.phase='SYNC'; S.settleT=0; }
+      break;
+    }
+    case 'SYNC':{
+      S.vc = Math.min(v, S.vc + ACC*dt);
+      S.xc += S.vc*dt;
+      if(S.vc >= v - 1e-6){
+        S.settleT += dt;
+        if(S.settleT >= SETTLE){ S.phase='CUT'; S.bladeT=0; S.cutDone=false; }
+      }
+      break;
+    }
+    case 'CUT':{
+      S.vc = v; S.xc += v*dt;
+      S.bladeT += dt;
+      if(!S.cutDone && S.bladeT >= BLADE_T){
+        S.cutDone = true;
+        const len = S.xF - S.xc;
+        S.sheets.push({x:S.xc, len, spd:v, y:PL, drop:false, dropT:0, fresh:1});
+        S.xF = S.xc; S.lastCutRef = S.xc;
+        S.lastLen = len; S.cutCount++;
+        S.flashes.push({x:S.xc, t:0});
+      }
+      S.blade = S.cutDone
+        ? Math.max(0, 1-(S.bladeT-BLADE_T)/BLADE_T)
+        : Math.min(1, S.bladeT/BLADE_T);
+      if(S.bladeT >= 2*BLADE_T){ S.phase='RETURN'; S.blade=0; }
+      break;
+    }
+    case 'RETURN':{
+      const tgt = -Math.min(VR, Math.sqrt(2*ACC*Math.max(0, S.xc-XH)));
+      S.vc = Math.max(tgt, S.vc - ACC*dt);
+      S.xc += S.vc*dt;
+      if(S.xc <= XH+0.004){ S.xc=XH; S.vc=0; S.phase='FEED'; }
+      break;
+    }
+  }
+
+  /* 切板の搬送・積載 */
+  for(let i=S.sheets.length-1; i>=0; i--){
+    const sh = S.sheets[i];
+    sh.fresh = Math.max(0, sh.fresh - dt*0.7);
+    if(sh.drop){
+      sh.dropT += dt;
+      const k = Math.min(1, sh.dropT/0.35);
+      const top = PALLET_TOP + S.pile.length*TH;
+      sh.y = PL + (top + TH - PL)*(k*k);
+      if(k >= 1){
+        S.pile.push(sh.len);
+        S.sheets.splice(i,1);
+        if(S.pile.length >= PILE_MAX && !S.palletAnim) S.palletAnim = {t:0};
+      }
+    }else{
+      sh.spd = Math.min(vConv, sh.spd + 4*dt);
+      sh.x += sh.spd*dt;
+      if(sh.x + sh.len >= XSTOP){
+        sh.x = XSTOP - sh.len;
+        if(S.palletAnim){ sh.spd = 0; }        // 搬出中は手前で待機
+        else { sh.drop = true; sh.dropT = 0; }
+      }
+    }
+  }
+
+  /* パレット搬出（満載になると横へ払い出し） */
+  if(S.palletAnim){
+    S.palletAnim.t += dt/1.4;
+    if(S.palletAnim.t >= 1){
+      S.palletAnim = null; S.pile.length = 0; S.palletCount++;
+    }
+  }
+
+  for(let i=S.flashes.length-1; i>=0; i--){
+    S.flashes[i].t += dt*4;
+    if(S.flashes[i].t > 1) S.flashes.splice(i,1);
+  }
+}
+
+/* =========================================================
+   簡易3Dレンダラ（Canvas2D / ペインタ法）
+   ========================================================= */
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let Wpx=0, Hpx=0, dpr=1;
+
+function resize(){
+  dpr = Math.min(2, window.devicePixelRatio||1);
+  const r = cv.parentElement.getBoundingClientRect();
+  Wpx = Math.max(50, r.width); Hpx = Math.max(50, r.height);
+  cv.width = Wpx*dpr; cv.height = Hpx*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', resize);
+
+/* ---- カメラ（軌道） ---- */
+const cam = {yaw:0.55, pitch:0.40, dist:30, tx:0.6, ty:1.4, tz:0, auto:false};
+const PRESETS = {
+  all:  {yaw:0.55, pitch:0.40, dist:30, tx:0.6,  ty:1.4, tz:0},
+  shear:{yaw:0.85, pitch:0.28, dist:9.5,tx:-1.2, ty:1.7, tz:0},
+  out:  {yaw:0.55, pitch:0.34, dist:14, tx:14.5, ty:1.2, tz:0},
+  top:  {yaw:1.57, pitch:1.45, dist:34, tx:0.6,  ty:0,   tz:0}
+};
+let camAnim = null;
+function goPreset(name){
+  const p = PRESETS[name];
+  camAnim = {t:0, from:{...cam}, to:p};
+}
+
+let eye=[0,0,0], AX=[1,0,0], AY=[0,1,0], AZ=[0,0,1], FL=500;
+function updateCamera(dt){
+  if(camAnim){
+    camAnim.t += dt/0.7;
+    const k = camAnim.t>=1 ? 1 : (1-Math.cos(Math.PI*Math.min(1,camAnim.t)))/2;
+    const f=camAnim.from, o=camAnim.to;
+    cam.yaw   = f.yaw  +(o.yaw  -f.yaw  )*k;
+    cam.pitch = f.pitch+(o.pitch-f.pitch)*k;
+    cam.dist  = f.dist +(o.dist -f.dist )*k;
+    cam.tx = f.tx+(o.tx-f.tx)*k; cam.ty = f.ty+(o.ty-f.ty)*k; cam.tz = f.tz+(o.tz-f.tz)*k;
+    if(camAnim.t>=1) camAnim=null;
+  }
+  if(cam.auto && !camAnim) cam.yaw += 0.05*dt;
+  const cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
+  const sy=Math.sin(cam.yaw),   cy=Math.cos(cam.yaw);
+  eye = [cam.tx + cam.dist*cp*sy, cam.ty + cam.dist*sp, cam.tz + cam.dist*cp*cy];
+  // 視線基底（右手系 lookAt）
+  let zx=eye[0]-cam.tx, zy=eye[1]-cam.ty, zz=eye[2]-cam.tz;
+  const zl=Math.hypot(zx,zy,zz); zx/=zl; zy/=zl; zz/=zl;      // 後方
+  let xx=zz, xy2=0, xz=-zx;                                    // up×z
+  const xl=Math.hypot(xx,xy2,xz)||1; xx/=xl; xz/=xl;
+  const yx=zy*xz-zz*xy2, yy=zz*xx-zx*xz, yz=zx*xy2-zy*xx;      // z×x
+  AX=[xx,xy2,xz]; AY=[yx,yy,yz]; AZ=[-zx,-zy,-zz];             // AZ=前方
+  FL = (Hpx*0.5)/Math.tan(25*Math.PI/180);
+}
+function view(p){
+  const dx=p[0]-eye[0], dy=p[1]-eye[1], dz=p[2]-eye[2];
+  return [ dx*AX[0]+dy*AX[1]+dz*AX[2],
+           dx*AY[0]+dy*AY[1]+dz*AY[2],
+           dx*AZ[0]+dy*AZ[1]+dz*AZ[2] ];
+}
+function toScreen(vp){
+  const s = FL/vp[2];
+  return [Wpx/2 + vp[0]*s, Hpx/2 - vp[1]*s];
+}
+
+/* ---- 面リスト構築ヘルパ ---- */
+const LDIR=[0.447,0.844,0.298];
+let F=[];
+function poly(v, col, cull=true){ F.push({v, col, cull}); }
+function box(cx,cy,cz,sx,sy,sz,col){
+  const x=sx/2,y=sy/2,z=sz/2;
+  const p=[[cx-x,cy-y,cz-z],[cx+x,cy-y,cz-z],[cx+x,cy+y,cz-z],[cx-x,cy+y,cz-z],
+           [cx-x,cy-y,cz+z],[cx+x,cy-y,cz+z],[cx+x,cy+y,cz+z],[cx-x,cy+y,cz+z]];
+  poly([p[4],p[5],p[6],p[7]],col); poly([p[1],p[0],p[3],p[2]],col);
+  poly([p[5],p[1],p[2],p[6]],col); poly([p[0],p[4],p[7],p[3]],col);
+  poly([p[3],p[7],p[6],p[2]],col); poly([p[0],p[1],p[5],p[4]],col);
+}
+/* 上面4点（上から見て反時計回り）を厚みthだけ下に押し出す */
+function prism(q, th, col){
+  const b = q.map(p=>[p[0], p[1]-th, p[2]]);
+  poly(q, col);
+  poly([b[3],b[2],b[1],b[0]], col);
+  for(let i=0;i<4;i++){
+    const j=(i+1)%4;
+    poly([q[i], b[i], b[j], q[j]], col);
+  }
+}
+/* z軸方向の円柱（ロール・コイル） */
+function cylZ(cx,cy,cz,r,len,seg,col,phase,markCol){
+  const h=len/2, pts=[];
+  for(let i=0;i<seg;i++){
+    const a=phase + i*2*Math.PI/seg;
+    pts.push([Math.cos(a)*r, Math.sin(a)*r]);
+  }
+  for(let i=0;i<seg;i++){
+    const j=(i+1)%seg, c = (markCol && i===0)? markCol : col;
+    poly([[cx+pts[i][0],cy+pts[i][1],cz-h],[cx+pts[j][0],cy+pts[j][1],cz-h],
+          [cx+pts[j][0],cy+pts[j][1],cz+h],[cx+pts[i][0],cy+pts[i][1],cz+h]], c);
+  }
+  const capF=[], capB=[];
+  for(let i=0;i<seg;i++){
+    capF.push([cx+pts[i][0], cy+pts[i][1], cz+h]);
+    capB.push([cx+pts[seg-1-i][0], cy+pts[seg-1-i][1], cz-h]);
+  }
+  poly(capF,col); poly(capB,col);
+}
+
+/* ---- シーン構築（毎フレーム） ---- */
+function slabRun(x0,y0,x1,y1,col){ // 板：x0→x1（分割してソート精度を確保）
+  const n = Math.max(1, Math.ceil(Math.abs(x1-x0)/1.6));
+  for(let i=0;i<n;i++){
+    const a=x0+(x1-x0)*i/n, b=x0+(x1-x0)*(i+1)/n;
+    const ya=y0+(y1-y0)*i/n, yb=y0+(y1-y0)*(i+1)/n;
+    prism([[a,ya,HW],[b,yb,HW],[b,yb,-HW],[a,ya,-HW]], TH, col);
+  }
+}
+
+function buildScene(){
+  F=[];
+  const v=S.v, vConv=Math.max(v*1.8, v+1.0);
+
+  /* ① アンコイラー */
+  box(COIL_X, 0.28, 0, 2.6, 0.56, 3.8, C.steelD);
+  box(COIL_X, 1.9, -1.75, 1.0, 2.7, 0.5, C.steel);   // 奥側支柱
+  box(COIL_X, 1.9,  1.75, 1.0, 2.7, 0.5, C.steel);   // 手前支柱
+  cylZ(COIL_X, COIL_CY, 0, 0.42, COIL_LEN+1.1, 12, C.dark, 0);            // マンドレル
+  cylZ(COIL_X, COIL_CY, 0, S.coilR, COIL_LEN, 24, C.steelL, S.coilPh, C.rollMark); // コイル
+  { // 端面の回転マーカ
+    const a=S.coilPh, r0=0.5, r1=S.coilR*0.94;
+    const dx=Math.cos(a), dy=Math.sin(a), px=-dy*0.05, py=dx*0.05;
+    for(const zz of [COIL_LEN/2+0.012, -COIL_LEN/2-0.012]){
+      poly([[COIL_X+dx*r0+px,COIL_CY+dy*r0+py,zz],[COIL_X+dx*r1+px,COIL_CY+dy*r1+py,zz],
+            [COIL_X+dx*r1-px,COIL_CY+dy*r1-py,zz],[COIL_X+dx*r0-px,COIL_CY+dy*r0-py,zz]],
+            C.rollMark, false);
+    }
+  }
+
+  /* ② レベラー（手前側は低くしたカットアウェイ表示） */
+  box(-10, 0.55, 0, 3.4, 1.1, 3.0, C.steelD);
+  box(-10, 1.85, -1.42, 3.4, 1.6, 0.16, C.levBlue);   // 奥側プレート
+  box(-10, 1.28, 1.42, 3.4, 0.45, 0.16, C.levBlue);   // 手前プレート(低)
+  box(-10, 2.78, 0, 3.4, 0.3, 3.0, C.levBlue);        // 上部ビーム
+  for(const rx of [-11.1,-10.35,-9.6,-8.85])
+    cylZ(rx, PL-TH-0.22, 0, 0.22, 2.6, 10, C.roller, -S.levPh, C.rollMark);
+  for(const rx of [-10.72,-9.97,-9.22])
+    cylZ(rx, PL+0.22, 0, 0.22, 2.6, 10, C.roller, S.levPh, C.rollMark);
+
+  /* ③ 測長ピンチロール */
+  box(-6, 0.35, 0, 1.4, 0.7, 3.2, C.steelD);
+  box(-6, 1.7, -1.5, 1.2, 2.1, 0.22, C.steel);
+  box(-6, 0.95, 1.5, 1.2, 0.6, 0.22, C.steel);
+  cylZ(-6, PL-TH-0.35, 0, 0.35, 2.6, 12, C.roller, -S.feedPh, C.rollMark);
+  cylZ(-6, PL+0.35,   0, 0.35, 2.6, 12, C.roller,  S.feedPh, C.rollMark);
+
+  /* 入側・出側ブリッジテーブル */
+  box(-4.45, 1.30, 0, 1.5, 0.44, 2.7, C.steel);
+  box( 3.15, 1.30, 0, 0.9, 0.44, 2.7, C.steel);
+
+  /* ④ フライングシャー：レール＋走行キャリッジ */
+  box(-0.25, 0.14, -1.62, 6.5, 0.28, 0.3, C.steelD);
+  box(-0.25, 0.14,  1.62, 6.5, 0.28, 0.3, C.steelD);
+  {
+    const x=S.xc;
+    box(x, 0.42, -1.62, 1.3, 0.3, 0.4, C.orange);   // スライダ
+    box(x, 0.42,  1.62, 1.3, 0.3, 0.4, C.orange);
+    box(x, 1.75, -1.62, 0.8, 2.4, 0.42, C.yellow);  // 支柱
+    box(x, 1.75,  1.62, 0.8, 2.4, 0.42, C.yellow);
+    box(x, 3.12, 0, 0.95, 0.5, 3.9, C.yellow);      // クロスヘッド
+    box(x, 1.22, 0, 1.0, 0.55, 3.2, C.yellow);      // 下部ベッド
+    box(x, 1.50, 0, 0.18, 0.10, 2.9, C.blade);      // 下刃
+    const bBot = 2.45 + (PL - TH - 0.05 - 2.45)*S.blade; // 上刃下端
+    box(x, bBot+0.35, 0, 0.16, 0.7, 2.9, C.blade);  // 上刃
+    box(x, bBot+0.98, 0, 0.42, 0.55, 3.1, C.orange);// 刃ホルダ
+    box(x, 2.70, -0.8, 0.3, 0.5, 0.3, C.steelD);    // シリンダ(飾り)
+    box(x, 2.70,  0.8, 0.3, 0.5, 0.3, C.steelD);
+  }
+
+  /* ⑤ ランアウトコンベア */
+  box(8.5, 1.26, -1.45, 10.4, 0.34, 0.14, C.convBlue);
+  box(8.5, 1.26,  1.45, 10.4, 0.34, 0.14, C.convBlue);
+  for(const lx of [4.2, 7.2, 10.2, 13.0]){
+    box(lx, 0.55, -1.42, 0.24, 1.1, 0.2, C.steelD);
+    box(lx, 0.55,  1.42, 0.24, 1.1, 0.2, C.steelD);
+  }
+  for(let rx=4.0; rx<=13.2; rx+=1.0)
+    cylZ(rx, PL-TH-0.15, 0, 0.15, 2.7, 8, C.roller, -S.convPh, C.rollMark);
+
+  /* ⑥ スタッカー */
+  box(16.1, 0.30, 0, 5.2, 0.6, 3.0, C.teal);              // リフトテーブル
+  box(16.1, PALLET_TOP-0.05, 0, 5.0, 0.1, 2.6, C.pallet); // パレット
+  box(XSTOP+0.14, 1.35, 0, 0.24, 1.7, 2.8, C.teal);       // ストッパ
+  box(16.0, 1.0, -1.42, 4.8, 1.2, 0.1, C.teal);           // 奥ガイド
+  box(16.0, 0.85, 1.42, 4.8, 0.5, 0.1, C.teal);           // 手前ガイド(低)
+
+  /* 積載パイル（搬出アニメ中は+z方向へスライド） */
+  {
+    let zoff = 0;
+    if(S.palletAnim){
+      const k=S.palletAnim.t;
+      zoff = (k<0.5 ? 2*k*k : 1-2*(1-k)*(1-k)) * 5.2;
+    }
+    S.pile.forEach((len,i)=>{
+      box(XSTOP-len/2, PALLET_TOP + i*TH + TH/2, zoff, len, TH, 2.2, C.alu);
+    });
+  }
+
+  /* ---- アルミ板（連続材） ---- */
+  const yCoil = COIL_CY - S.coilR + TH;   // コイル下側の払い出し点
+  slabRun(COIL_X, yCoil, -11.5, PL, C.alu);            // コイル→レベラー（傾斜）
+  slabRun(-11.5, PL, Math.max(-11.4, S.xF), PL, C.alu);// レベラー→先端
+
+  /* ---- 切板 ---- */
+  for(const sh of S.sheets){
+    const col = sh.fresh>0
+      ? [ C.alu[0]+(C.aluFresh[0]-C.alu[0])*sh.fresh,
+          C.alu[1]+(C.aluFresh[1]-C.alu[1])*sh.fresh,
+          C.alu[2]+(C.aluFresh[2]-C.alu[2])*sh.fresh ]
+      : C.alu;
+    slabRun(sh.x, sh.y, sh.x+sh.len, sh.y, col);
+  }
+}
+
+/* ---- 描画 ---- */
+function shade(col, n, twoSide){
+  let d = n[0]*LDIR[0]+n[1]*LDIR[1]+n[2]*LDIR[2];
+  if(twoSide) d = Math.abs(d);
+  const b = 0.42 + 0.62*Math.max(0,d);
+  return `rgb(${Math.min(255,col[0]*b)|0},${Math.min(255,col[1]*b)|0},${Math.min(255,col[2]*b)|0})`;
+}
+
+function drawFloor(){
+  const q=(pts,fill)=>{
+    let ok=true; const s=[];
+    for(const p of pts){ const vp=view(p); if(vp[2]<0.35){ok=false;break;} s.push(toScreen(vp)); }
+    if(!ok) return;
+    ctx.beginPath(); ctx.moveTo(s[0][0],s[0][1]);
+    for(let i=1;i<s.length;i++) ctx.lineTo(s[i][0],s[i][1]);
+    ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
+  };
+  q([[-20,0,-8],[21.5,0,-8],[21.5,0,8],[-20,0,8]], 'rgb(40,45,53)');
+  q([[-19,0.005,-3.1],[21,0.005,-3.1],[21,0.005,3.1],[-19,0.005,3.1]], 'rgb(52,59,69)');
+  q([[-4.2,0.01,-3.0],[3.7,0.01,-3.0],[3.7,0.01,3.0],[-4.2,0.01,3.0]], 'rgb(66,66,50)'); // シャー安全域
+  q([[-19,0.012,-3.25],[21,0.012,-3.1],[21,0.012,-3.1],[-19,0.012,-3.1]], 'rgb(176,146,58)');
+  q([[-19,0.012, 3.1],[21,0.012, 3.1],[21,0.012, 3.25],[-19,0.012, 3.25]], 'rgb(176,146,58)');
+}
+
+function drawScene(){
+  // 背景
+  const g = ctx.createLinearGradient(0,0,0,Hpx);
+  g.addColorStop(0,'#1a2430'); g.addColorStop(0.62,'#141b24'); g.addColorStop(1,'#0e1319');
+  ctx.fillStyle=g; ctx.fillRect(0,0,Wpx,Hpx);
+
+  drawFloor();
+
+  // 面の変換・カリング・ソート
+  const list=[];
+  for(const f of F){
+    const v0=f.v[0], v1=f.v[1], v2=f.v[2];
+    const ax=v1[0]-v0[0], ay=v1[1]-v0[1], az=v1[2]-v0[2];
+    const bx=v2[0]-v0[0], by=v2[1]-v0[1], bz=v2[2]-v0[2];
+    const nx=ay*bz-az*by, ny=az*bx-ax*bz, nz=ax*by-ay*bx;
+    if(f.cull){
+      const ex=eye[0]-v0[0], ey=eye[1]-v0[1], ez=eye[2]-v0[2];
+      if(nx*ex+ny*ey+nz*ez <= 0) continue;
+    }
+    let depth=0; const sp=[]; let ok=true;
+    for(const p of f.v){
+      const vp=view(p);
+      if(vp[2] < 0.35){ ok=false; break; }
+      depth += vp[2];
+      sp.push(toScreen(vp));
+    }
+    if(!ok) continue;
+    const nl=Math.hypot(nx,ny,nz)||1;
+    list.push({sp, depth:depth/f.v.length,
+               fill:shade(f.col,[nx/nl,ny/nl,nz/nl],!f.cull)});
+  }
+  list.sort((a,b)=>b.depth-a.depth);
+
+  ctx.lineJoin='round';
+  for(const f of list){
+    ctx.beginPath();
+    ctx.moveTo(f.sp[0][0], f.sp[0][1]);
+    for(let i=1;i<f.sp.length;i++) ctx.lineTo(f.sp[i][0], f.sp[i][1]);
+    ctx.closePath();
+    ctx.fillStyle=f.fill; ctx.fill();
+    ctx.strokeStyle=f.fill; ctx.lineWidth=1; ctx.stroke(); // AA隙間防止
+  }
+
+  // 切断フラッシュ
+  for(const fl of S.flashes){
+    const a = view([fl.x, PL, -HW-0.05]), b = view([fl.x, PL, HW+0.05]);
+    if(a[2]<0.35||b[2]<0.35) continue;
+    const pa=toScreen(a), pb=toScreen(b), al=1-fl.t;
+    ctx.strokeStyle=`rgba(255,236,150,${al})`;
+    ctx.lineWidth=3+6*fl.t; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke();
+    const m=view([fl.x, PL, 0]);
+    if(m[2]>0.35){
+      const pm=toScreen(m), r=(FL/m[2])*0.55*(0.4+fl.t);
+      const rg=ctx.createRadialGradient(pm[0],pm[1],0,pm[0],pm[1],r);
+      rg.addColorStop(0,`rgba(255,244,190,${0.75*al})`);
+      rg.addColorStop(1,'rgba(255,244,190,0)');
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(pm[0],pm[1],r,0,7); ctx.fill();
+    }
+  }
+}
+
+/* ---- ラベル ---- */
+function drawLabels(){
+  if(!ui.chkLabels.checked) return;
+  const labels = [
+    {p:[COIL_X, COIL_CY+1.9, 0], t:'アンコイラー'},
+    {p:[-13.6, 2.9, 0],          t:'アルミ板（ストリップ）', small:true},
+    {p:[-10, 3.6, 0],            t:'レベラー（矯正機）'},
+    {p:[-6, 3.1, 0],             t:'測長ピンチロール'},
+    {p:[S.xc, 3.95, 0],          t:'フライングシャー（走間剪断機）'},
+    {p:[8.6, 2.5, 0],            t:'ランアウトコンベア（高速搬出）'},
+    {p:[16.4, 2.9, 0],           t:'スタッカー（積載）'}
+  ];
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<labels.length;i++){
+    const L=labels[i];
+    const vp=view(L.p);
+    if(vp[2] < 0.6) continue;
+    const [sx,sy]=toScreen(vp);
+    if(sx<-40||sx>Wpx+40||sy<-20||sy>Hpx+20) continue;
+    const fs = L.small? 11:12;
+    ctx.font=`${fs}px system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif`;
+    const w = ctx.measureText(L.t).width+16, h=fs+10;
+    const by = sy - (26 + (i%2)*30);   // 交互に高さをずらして重なりを軽減
+    ctx.strokeStyle='rgba(200,215,230,0.5)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx,by+h/2); ctx.stroke();
+    ctx.fillStyle='rgba(16,21,28,0.85)';
+    ctx.strokeStyle='rgba(150,170,190,0.45)';
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(sx-w/2, by-h/2, w, h, 6);
+    else ctx.rect(sx-w/2, by-h/2, w, h);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#e8eef5';
+    ctx.fillText(L.t, sx, by+0.5);
+  }
+}
+
+/* ---------- HUD更新 ---------- */
+const ui = {};
+for(const id of ['btnRun','btnReset','rngSpeed','valSpeed','rngLen','valLen',
+  'chkLabels','chkRotate','stLine','stCar','stSync','stMeas','measbar',
+  'stCount','stLast','stPallet','ph0','ph1','ph2','ph3'])
+  ui[id]=document.getElementById(id);
+
+const PHASE_IDX = {FEED:0, SYNC:1, CUT:2, RETURN:3};
+function updateHUD(){
+  ui.stLine.textContent = (S.v*60).toFixed(0)+' m/min';
+  ui.stCar.textContent  = (Math.abs(S.vc)*60).toFixed(0)+' m/min' + (S.vc<0?' (戻り)':'');
+  const sync = S.v>0 ? Math.max(0, S.vc)/S.v*100 : 0;
+  ui.stSync.textContent = sync.toFixed(0)+' %';
+  ui.stSync.style.color = sync>99 ? 'var(--ok)' : '';
+  const meas = Math.max(0, S.xF - S.lastCutRef);
+  ui.stMeas.textContent = meas.toFixed(2)+' / '+S.CL.toFixed(2)+' m';
+  ui.measbar.style.width = Math.min(100, meas/S.CL*100)+'%';
+  ui.stCount.textContent = S.cutCount+' 枚';
+  ui.stLast.textContent  = S.lastLen>0 ? S.lastLen.toFixed(2)+' m' : '–';
+  ui.stPallet.textContent = S.palletCount+' 回';
+  const idx = PHASE_IDX[S.phase];
+  for(let i=0;i<4;i++) ui['ph'+i].classList.toggle('on', i===idx);
+}
+
+/* ---------- 操作 ---------- */
+ui.btnRun.addEventListener('click', ()=>{
+  S.running=!S.running;
+  ui.btnRun.textContent = S.running ? '⏸ 一時停止' : '▶ 運転再開';
+  ui.btnRun.classList.toggle('primary', S.running);
+});
+ui.btnReset.addEventListener('click', resetSim);
+ui.rngSpeed.addEventListener('input', ()=>{
+  S.v = ui.rngSpeed.value/60;
+  ui.valSpeed.textContent = ui.rngSpeed.value+' m/min';
+});
+ui.rngLen.addEventListener('input', ()=>{
+  S.CL = parseFloat(ui.rngLen.value);
+  ui.valLen.textContent = S.CL.toFixed(2).replace(/0$/,'')+' m';
+});
+document.querySelectorAll('.ts').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.ts').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel'); S.timeScale=parseFloat(b.dataset.ts);
+}));
+document.querySelectorAll('.vw').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.vw').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel'); goPreset(b.dataset.view);
+}));
+ui.chkRotate.addEventListener('change', ()=>{ cam.auto = ui.chkRotate.checked; });
+
+/* マウス／タッチ操作 */
+let drag=null, pinch=null;
+cv.addEventListener('pointerdown', e=>{
+  cv.setPointerCapture(e.pointerId);
+  if(drag && drag.id!==e.pointerId){ pinch={a:drag.id, b:e.pointerId, pts:{}, d0:0}; }
+  drag={id:e.pointerId, x:e.clientX, y:e.clientY};
+  cv.classList.add('dragging');
+});
+cv.addEventListener('pointermove', e=>{
+  if(pinch){
+    pinch.pts[e.pointerId]=[e.clientX,e.clientY];
+    const ks=Object.keys(pinch.pts);
+    if(ks.length===2){
+      const A=pinch.pts[ks[0]], B=pinch.pts[ks[1]];
+      const d=Math.hypot(A[0]-B[0], A[1]-B[1]);
+      if(pinch.d0>0) cam.dist=Math.min(60, Math.max(5, cam.dist*pinch.d0/d));
+      pinch.d0=d;
+    }
+    return;
+  }
+  if(!drag || e.pointerId!==drag.id) return;
+  cam.yaw   -= (e.clientX-drag.x)*0.005;
+  cam.pitch += (e.clientY-drag.y)*0.005;
+  cam.pitch = Math.min(1.5, Math.max(0.06, cam.pitch));
+  drag.x=e.clientX; drag.y=e.clientY;
+  camAnim=null;
+});
+const endPtr=e=>{ if(drag&&e.pointerId===drag.id) drag=null; pinch=null; cv.classList.remove('dragging'); };
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  cam.dist=Math.min(60, Math.max(5, cam.dist*Math.exp(e.deltaY*0.0012)));
+}, {passive:false});
+cv.addEventListener('dblclick', ()=>goPreset('all'));
+
+/* ---------- メインループ ---------- */
+let tPrev=performance.now();
+function frame(t){
+  const dt = Math.min(0.05, (t-tPrev)/1000); tPrev=t;
+  updateCamera(dt);
+  if(S.running){
+    // 精度確保のため小刻みに積分
+    let rem = dt*S.timeScale;
+    while(rem > 1e-6){ const h=Math.min(rem, 1/120); step(h); rem-=h; }
+  }
+  buildScene();
+  drawScene();
+  drawLabels();
+  updateHUD();
+  requestAnimationFrame(frame);
+}
+resize();
+goPreset('all');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
