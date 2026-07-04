@@ -170,7 +170,7 @@
         <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のロールで巻きぐせ・反りを矯正</span></div></li>
         <li><span class="dot" style="background:#5b7186"></span><div><b>③ 測長ピンチロール</b><br><span>板に密着して送り長さを計測</span></div></li>
         <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同速で走行し、クランプで板を固定して上刃・下刃のすれ違いで剪断</span></div></li>
-        <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインより高速で搬送し、切板間にギャップを作る</span></div></li>
+        <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインと同じ速度で搬送し、そのままスタッカーへ送る</span></div></li>
         <li><span class="dot" style="background:#4a8a86"></span><div><b>⑥ スタッカー</b><br><span>ストッパ手前で減速・停止させ積載（8枚で搬出）</span></div></li>
       </ul>
     </div>
@@ -186,7 +186,7 @@
             <li>クランプが板を固定し、同期を保ったまま上刃が降下 → 下刃とのすれ違いで剪断</li>
             <li>刃・クランプが開放後、キャリッジは減速・後退して原位置へ復帰</li>
           </ol>
-          <p>切断された板は高速のランアウトコンベアで前の板から引き離され（ギャップ形成）、スタッカーのストッパ手前で減速・停止して積み重ねられます。</p>
+          <p>切断された板はランアウトコンベアでライン速度のまま搬送され、スタッカーのストッパ手前で減速・停止して積み重ねられます。</p>
           <p class="note">※板厚・寸法・速度は、動作を見やすくするため誇張しています（1目盛=1m相当）。<br>3D描画: Three.js r149（MIT License, 本ファイルに同梱）</p>
         </div>
       </details>
@@ -262,8 +262,7 @@ function resetSim(){
 
 /* ---------- 物理ステップ ---------- */
 function step(dt){
-  const v = S.v;
-  const vConv = Math.max(v*1.8, v+1.0);
+  const v = S.v;   // ライン速度で統一（出側で加速させない）
 
   /* 材料送り・コイル */
   S.xF += v*dt;
@@ -347,7 +346,7 @@ function step(dt){
       }
     }else{
       const vAllow = Math.max(0.35, Math.sqrt(2*5*dist)); // ソフトストップ
-      sh.spd = Math.min(sh.spd + 4*dt, vConv, vAllow);
+      sh.spd = Math.min(sh.spd + 4*dt, v, vAllow);
       sh.x += sh.spd*dt;
       if(sh.x + sh.len > limit) sh.x = limit - sh.len;
     }
@@ -645,9 +644,10 @@ let carGrp, bladeGrp, clampGrp, carWheels=[];
 }
 
 /* ---------- ⑤ ランアウトコンベア ---------- */
-// 切断長さ最大8m（STK_LEN）に対応し、スタッカーのストッパ手前まで切れ目なく支持する
-const RO_LEGS = [4.2, 7.2, 10.2, 13.0, 16.0, 18.0];
-const RO_END = 18.0;
+// ロールはスタッカーの受け入れ範囲(STK_LEFT)手前で終える：
+// ここから先まで伸ばすと、切板がストッパで落下（積載）する際にロールをすり抜けて見えるため。
+const RO_LEGS = [4.2, 7.2, 10.2];
+const RO_END = STK_LEFT;
 {
   const g = new THREE.Group(); scene.add(g);
   const railCx = (4.0+RO_END)/2, railLen = (RO_END-4.0)+1.0;
@@ -751,8 +751,8 @@ let stripMesh, stripPos;
   scene.add(stripMesh);
 }
 function updateStrip(){
-  // 経路：コイル下端(接線・水平)→ベジエ→レベラー入側(水平)→先端xF
-  const y0 = COIL_CY - S.coilR;       // 板上面＝コイル外周下端（外層から巻き出し）
+  // 経路：コイル上端(接線・水平)→ベジエ→レベラー入側(水平)→先端xF
+  const y0 = COIL_CY + S.coilR;       // 板上面＝コイル外周上端（上から巻き出し）
   const P0x=COIL_X, C1x=COIL_X+2.0, C2x=LEV_ENTRY-2.0, P3x=LEV_ENTRY;
   const xs=[], ys=[];
   for(let i=0;i<NB;i++){
@@ -793,11 +793,9 @@ function updateDynamics(dt){
   coilMesh.rotation.z = S.coilPh;
   mandrel.rotation.z = S.coilPh;
   updateSnubber(dt);
-  // ロール回転（線速一定で転がり接触）
-  const vConv = Math.max(S.v*1.8, S.v+1.0);
+  // ロール回転（ラインとの速度差を作らず、常に線速一定で転がり接触）
   for(const sp of spinners){
-    const vs = sp.kind==='conv' ? vConv : S.v;
-    sp.mesh.rotation.z += sp.dir * (vs/sp.r) * dt;
+    sp.mesh.rotation.z += sp.dir * (S.v/sp.r) * dt;
   }
   // キャリッジ
   carGrp.position.x = S.xc;
@@ -886,7 +884,7 @@ function drawOverlay(){
     {p:[-10, 3.55, 0], t:'レベラー（矯正機）'},
     {p:[-6, 3.0, 0], t:'測長ピンチロール'},
     {p:[S.xc, 4.35, 0], t:'フライングシャー（走間剪断機）'},
-    {p:[9.5, 2.5, 0], t:'ランアウトコンベア（高速搬出）'},
+    {p:[9.5, 2.5, 0], t:'ランアウトコンベア'},
     {p:[STK_CX+0.3, 3.1, 0], t:'スタッカー（積載）'}
   ];
   octx.textAlign='center'; octx.textBaseline='middle';
