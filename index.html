@@ -132,11 +132,14 @@
         <button id="btnRun" class="primary grow">⏸ 一時停止</button>
         <button id="btnReset">↺ リセット</button>
       </div>
-      <label class="slider">ライン速度 <span class="val" id="valSpeed">90 m/min</span>
-        <input type="range" id="rngSpeed" min="30" max="150" step="6" value="90">
+      <label class="slider">ライン速度 <span class="val" id="valSpeed">20 m/min</span>
+        <input type="range" id="rngSpeed" min="0" max="40" step="1" value="20">
       </label>
-      <label class="slider">切断長さ <span class="val" id="valLen">3.0 m</span>
-        <input type="range" id="rngLen" min="2.0" max="4.5" step="0.25" value="3.0">
+      <label class="slider">切断長さ <span class="val" id="valLen">3000 mm</span>
+        <input type="range" id="rngLen" min="300" max="8000" step="50" value="3000">
+      </label>
+      <label class="slider">板幅 <span class="val" id="valWidth">1200 mm</span>
+        <input type="range" id="rngWidth" min="300" max="1700" step="10" value="1200">
       </label>
       <label class="slider">アニメーション速度</label>
       <div class="row" style="margin-top:4px">
@@ -210,16 +213,21 @@
 /* ---------- 定数 ---------- */
 const PL = 1.60;            // パスライン（板の上面高さ）
 const TH = 0.06;            // 板厚（誇張）
-const SW = 2.20, HW = SW/2; // 板幅
+let SW = 1.20, HW = SW/2;   // 板幅（可変：300～1700mm）
 const XH = -2.50;           // キャリッジ原位置
 const ACC = 6.0;            // キャリッジ加減速度
 const VR  = 2.2;            // 復帰速度上限
 const SETTLE  = 0.12;       // 同期後の整定時間
 const BLADE_T = 0.22;       // 刃の下降(=上昇)時間
 const FIRE_K  = 0.81;       // 下降ストロークのうち刃先が板上面に達する割合
+const CL_MAX = 8.0;         // 切断長さの最大値（スタッカー寸法の基準）
 const XSTOP = 18.5;         // スタッカーストッパ位置
 const PALLET_TOP = 0.72;
 const PILE_MAX = 8;
+const STK_LEN = CL_MAX + 0.4;        // パレット等の全長（最大切断長＋余裕）
+const STK_RIGHT = XSTOP + 0.1;       // ストッパ側の端
+const STK_LEFT  = STK_RIGHT - STK_LEN;
+const STK_CX = (STK_LEFT + STK_RIGHT)/2;
 const COIL_X = -16, COIL_CY = 3.0, COIL_LEN = 2.6;
 const COIL_RMAX = 1.45, COIL_RMIN = 0.80;
 const PITCH = TH + 0.004;   // 積載ピッチ（面の重なりによるちらつき防止）
@@ -230,7 +238,7 @@ const BLADE_DN  = PL - TH - 0.07;    // 上刃下端（下降位置）
 /* ---------- シミュレーション状態 ---------- */
 const S = {
   running:true, timeScale:1,
-  v:1.5, CL:3.0,
+  v:20/60, CL:3.0,
   phase:'FEED', xF:-3, lastCutRef:-3,
   xc:XH, vc:0,
   blade:0, clamp:0, bladeT:0, settleT:0, cutDone:false,
@@ -551,8 +559,8 @@ function updateSnubber(dt){
 {
   const g = new THREE.Group(); scene.add(g);
   addBox(g, -10, 0.55, 0, 3.4, 1.1, 3.0, M.steelD);
-  addBox(g, -10, 1.85, -1.46, 3.4, 1.6, 0.16, M.levBlu);  // 奥プレート
-  addBox(g, -10, 1.25, 1.46, 3.4, 0.4, 0.16, M.levBlu);   // 手前プレート(カットアウェイ)
+  addBox(g, -10, 1.85, 1.46, 3.4, 1.6, 0.16, M.levBlu);   // 奥プレート
+  addBox(g, -10, 1.25, -1.46, 3.4, 0.4, 0.16, M.levBlu);  // 手前プレート(カットアウェイ・デフォルト視点側)
   addBox(g, -10, 2.78, 0, 3.4, 0.3, 3.08, M.levBlu);
   for(const jx of [-11.1,-10.1,-9.1])                     // 圧下ジャッキ
     addBox(g, jx, 3.1, 0, 0.24, 0.35, 0.24, M.steelD);
@@ -570,9 +578,9 @@ function updateSnubber(dt){
 {
   const g = new THREE.Group(); scene.add(g);
   addBox(g, -6, 0.35, 0, 1.5, 0.7, 3.3, M.steelD);
-  addBox(g, -6, 1.7, -1.55, 1.3, 2.1, 0.24, M.steel);
-  addBox(g, -6, 0.95, 1.55, 1.3, 0.6, 0.24, M.steel);
-  addBox(g, -6.9, 1.19, -1.9, 0.6, 0.6, 0.5, M.dark);     // 駆動モータ
+  addBox(g, -6, 1.7, 1.55, 1.3, 2.1, 0.24, M.steel);
+  addBox(g, -6, 0.95, -1.55, 1.3, 0.6, 0.24, M.steel);    // カットアウェイ側(デフォルト視点)
+  addBox(g, -6.9, 1.19, 1.9, 0.6, 0.6, 0.5, M.dark);      // 駆動モータ
   addRollZ(g, -6, PL-TH-0.35, 0, 0.35, 2.6, M.roller, -1);
   addRollZ(g, -6, PL+0.35,   0, 0.35, 2.6, M.roller, +1);
 }
@@ -584,8 +592,9 @@ function updateSnubber(dt){
   for(const rx of [-5.0,-4.4,-3.8])
     addRollZ(g, rx, PL-TH-0.09, 0, 0.09, 2.5, M.roller, -1, 'line', 14);
   // 出側テーブル：シャー出口～ランアウトコンベア間を切れ目なく支持
-  addBox(g, 2.15, 1.22, 0, 3.5, 0.34, 2.8, M.steel);
-  for(const rx of [0.75,1.35,1.95,2.55,3.15,3.75])
+  // （キャリッジ最大到達点[約x=-1.5]より手前で途切れさせ、キャリッジ本体と干渉しないようにする）
+  addBox(g, 1.275, 1.22, 0, 4.95, 0.34, 2.8, M.steel);
+  for(const rx of [-1.2,-0.6,0,0.6,1.2,1.8,2.4,3.0,3.6])
     addRollZ(g, rx, PL-TH-0.09, 0, 0.09, 2.5, M.roller, -1, 'conv', 14);
 }
 
@@ -636,59 +645,65 @@ let carGrp, bladeGrp, clampGrp, carWheels=[];
 }
 
 /* ---------- ⑤ ランアウトコンベア ---------- */
+// 切断長さ最大8m（STK_LEN）に対応し、スタッカーのストッパ手前まで切れ目なく支持する
+const RO_LEGS = [4.2, 7.2, 10.2, 13.0, 16.0, 18.0];
+const RO_END = 18.0;
 {
   const g = new THREE.Group(); scene.add(g);
-  addBox(g, 8.5, 1.26, -1.48, 10.4, 0.34, 0.14, M.convBl);
-  addBox(g, 8.5, 1.26,  1.48, 10.4, 0.34, 0.14, M.convBl);
-  for(const lx of [4.2, 7.2, 10.2, 13.0]){
+  const railCx = (4.0+RO_END)/2, railLen = (RO_END-4.0)+1.0;
+  addBox(g, railCx, 1.26, -1.48, railLen, 0.34, 0.14, M.convBl);
+  addBox(g, railCx, 1.26,  1.48, railLen, 0.34, 0.14, M.convBl);
+  for(const lx of RO_LEGS){
     addBox(g, lx, 0.55, -1.44, 0.24, 1.1, 0.2, M.steelD);
     addBox(g, lx, 0.55,  1.44, 0.24, 1.1, 0.2, M.steelD);
     addBox(g, lx, 0.06, 0, 0.4, 0.12, 3.1, M.dark);
   }
-  for(let rx=4.0; rx<=13.2; rx+=1.0)
+  for(let rx=4.0; rx<=RO_END; rx+=1.0)
     addRollZ(g, rx, PL-TH-0.15, 0, 0.15, 2.76, M.roller, -1, 'conv', 18);
   addBox(g, 5.0, 1.0, -1.75, 0.5, 0.5, 0.4, M.dark);   // 駆動モータ
 }
 
-/* ---------- ⑥ スタッカー ---------- */
+/* ---------- ⑥ スタッカー（最大切断長 STK_LEN に合わせた全長） ---------- */
 const pileGroup = new THREE.Group();
 {
   const g = new THREE.Group(); scene.add(g);
+  const braceOff = STK_LEN*0.24, braceLen = STK_LEN*0.48;
   // シザーリフト風テーブル
-  addBox(g, 16.1, 0.10, 0, 5.0, 0.2, 2.9, M.steelD);
-  const s1 = addBox(g, 16.1, 0.30, -1.2, 2.4, 0.1, 0.12, M.steel); s1.rotation.z = 0.12;
-  const s2 = addBox(g, 16.1, 0.30, -1.2, 2.4, 0.1, 0.12, M.steel); s2.rotation.z = -0.12;
-  const s3 = addBox(g, 16.1, 0.30, 1.2, 2.4, 0.1, 0.12, M.steel);  s3.rotation.z = 0.12;
-  const s4 = addBox(g, 16.1, 0.30, 1.2, 2.4, 0.1, 0.12, M.steel);  s4.rotation.z = -0.12;
-  addBox(g, 16.1, 0.56, 0, 5.2, 0.12, 3.0, M.teal);
-  addBox(g, 16.1, PALLET_TOP-0.05, 0, 5.0, 0.1, 2.6, M.pallet);   // パレット
+  addBox(g, STK_CX, 0.10, 0, STK_LEN, 0.2, 2.9, M.steelD);
+  const s1 = addBox(g, STK_CX-braceOff, 0.30, -1.2, braceLen, 0.1, 0.12, M.steel); s1.rotation.z = 0.12;
+  const s2 = addBox(g, STK_CX-braceOff, 0.30, -1.2, braceLen, 0.1, 0.12, M.steel); s2.rotation.z = -0.12;
+  const s3 = addBox(g, STK_CX+braceOff, 0.30, 1.2, braceLen, 0.1, 0.12, M.steel);  s3.rotation.z = 0.12;
+  const s4 = addBox(g, STK_CX+braceOff, 0.30, 1.2, braceLen, 0.1, 0.12, M.steel);  s4.rotation.z = -0.12;
+  addBox(g, STK_CX, 0.56, 0, STK_LEN+0.2, 0.12, 3.0, M.teal);
+  addBox(g, STK_CX, PALLET_TOP-0.05, 0, STK_LEN, 0.1, 2.6, M.pallet);   // パレット
   // ストッパ（衝撃吸収パッド付き）
   addBox(g, XSTOP+0.17, 1.45, 0, 0.3, 1.5, 2.8, M.teal);
   addBox(g, XSTOP+0.01, 1.2, 0, 0.04, 0.9, 2.4, M.dark);
   // サイドガイド（払い出し高さより上に配置：搬出パイルと干渉しない）
-  addBox(g, 15.9, 1.62, -1.42, 4.6, 0.5, 0.1, M.teal);
-  addBox(g, 15.9, 1.62,  1.42, 4.6, 0.5, 0.1, M.teal);
-  addBox(g, 13.9, 1.4, -1.42, 0.15, 1.9, 0.15, M.teal);  // ガイド脚
-  addBox(g, 13.9, 1.4,  1.42, 0.15, 1.9, 0.15, M.teal);
-  addBox(g, 17.9, 1.4, -1.42, 0.15, 1.9, 0.15, M.teal);
-  addBox(g, 17.9, 1.4,  1.42, 0.15, 1.9, 0.15, M.teal);
+  const guideLen = STK_LEN-0.6;
+  addBox(g, STK_CX, 1.62, -1.42, guideLen, 0.5, 0.1, M.teal);
+  addBox(g, STK_CX, 1.62,  1.42, guideLen, 0.5, 0.1, M.teal);
+  addBox(g, STK_LEFT+0.3, 1.4, -1.42, 0.15, 1.9, 0.15, M.teal);  // ガイド脚
+  addBox(g, STK_LEFT+0.3, 1.4,  1.42, 0.15, 1.9, 0.15, M.teal);
+  addBox(g, STK_RIGHT-0.3, 1.4, -1.42, 0.15, 1.9, 0.15, M.teal);
+  addBox(g, STK_RIGHT-0.3, 1.4,  1.42, 0.15, 1.9, 0.15, M.teal);
   // 払い出しチェーンコンベア（満載パイルを横方向へ搬出する受け台）
-  for(const cx of [14.6, 16.1, 17.6]){
+  for(const cx of [STK_CX-1.5, STK_CX, STK_CX+1.5]){
     addBox(g, cx, 0.66, 3.9, 0.36, 0.12, 5.1, M.steelD);
     addBox(g, cx, 0.30, 2.2, 0.28, 0.6, 0.24, M.steelD);
     addBox(g, cx, 0.30, 5.6, 0.28, 0.6, 0.24, M.steelD);
   }
-  addBox(g, 16.1, 0.5, 6.55, 3.6, 0.55, 0.14, M.teal);   // 搬出側エンドストップ
+  addBox(g, STK_CX, 0.5, 6.55, 3.6, 0.55, 0.14, M.teal);   // 搬出側エンドストップ
   scene.add(pileGroup);
 }
 
 /* ---------- 切板・パイル ---------- */
 const sheetGroup = new THREE.Group(); scene.add(sheetGroup);
-const sheetGeo = new THREE.BoxGeometry(1, TH, SW);
+const sheetGeo = new THREE.BoxGeometry(1, TH, 1);
 
 function spawnSheet(x, len, spd){
   const m = new THREE.Mesh(sheetGeo, M.alu);
-  m.scale.x = len;
+  m.scale.set(len, 1, SW);
   m.castShadow = true; m.receiveShadow = true;
   sheetGroup.add(m);
   S.sheets.push({mesh:m, x, len, spd, y:PL, drop:false, vy:0});
@@ -799,12 +814,13 @@ function updateDynamics(dt){
 }
 
 /* ---------- カメラ ---------- */
-const cam = {yaw:0.55, pitch:0.40, dist:30, tx:0.6, ty:1.4, tz:0, auto:false};
+// yawに+PIした側（反対側）をデフォルト視点とする：ライン材料の流れが右→左に見える
+const cam = {yaw:0.55+Math.PI, pitch:0.40, dist:30, tx:0.6, ty:1.4, tz:0, auto:false};
 const PRESETS = {
-  all:  {yaw:0.55, pitch:0.40, dist:31, tx:0.8,  ty:1.4, tz:0},
-  shear:{yaw:0.85, pitch:0.28, dist:9.5,tx:-1.2, ty:1.7, tz:0},
-  out:  {yaw:0.55, pitch:0.34, dist:14, tx:14.5, ty:1.2, tz:0},
-  top:  {yaw:1.57, pitch:1.45, dist:34, tx:0.6,  ty:0,   tz:0}
+  all:  {yaw:0.55+Math.PI, pitch:0.40, dist:31, tx:0.8,  ty:1.4, tz:0},
+  shear:{yaw:0.85+Math.PI, pitch:0.28, dist:9.5,tx:-1.2, ty:1.7, tz:0},
+  out:  {yaw:0.55+Math.PI, pitch:0.34, dist:19, tx:STK_CX+0.8, ty:1.2, tz:0},
+  top:  {yaw:1.57+Math.PI, pitch:1.45, dist:34, tx:0.6,  ty:0,   tz:0}
 };
 let camAnim=null;
 function goPreset(name){
@@ -870,8 +886,8 @@ function drawOverlay(){
     {p:[-10, 3.55, 0], t:'レベラー（矯正機）'},
     {p:[-6, 3.0, 0], t:'測長ピンチロール'},
     {p:[S.xc, 4.35, 0], t:'フライングシャー（走間剪断機）'},
-    {p:[8.6, 2.5, 0], t:'ランアウトコンベア（高速搬出）'},
-    {p:[16.4, 3.1, 0], t:'スタッカー（積載）'}
+    {p:[9.5, 2.5, 0], t:'ランアウトコンベア（高速搬出）'},
+    {p:[STK_CX+0.3, 3.1, 0], t:'スタッカー（積載）'}
   ];
   octx.textAlign='center'; octx.textBaseline='middle';
   for(let i=0;i<labels.length;i++){
@@ -897,7 +913,7 @@ function drawOverlay(){
 
 /* ---------- HUD ---------- */
 const ui={};
-for(const id of ['btnRun','btnReset','rngSpeed','valSpeed','rngLen','valLen',
+for(const id of ['btnRun','btnReset','rngSpeed','valSpeed','rngLen','valLen','rngWidth','valWidth',
   'chkLabels','chkRotate','chkShadow','chkFollow','stLine','stCar','stSync','stMeas',
   'measbar','stCount','stLast','stPallet','ph0','ph1','ph2','ph3'])
   ui[id]=document.getElementById(id);
@@ -931,8 +947,12 @@ ui.rngSpeed.addEventListener('input',()=>{
   ui.valSpeed.textContent=ui.rngSpeed.value+' m/min';
 });
 ui.rngLen.addEventListener('input',()=>{
-  S.CL=parseFloat(ui.rngLen.value);
-  ui.valLen.textContent=S.CL.toFixed(2).replace(/0$/,'')+' m';
+  S.CL=parseFloat(ui.rngLen.value)/1000;
+  ui.valLen.textContent=ui.rngLen.value+' mm';
+});
+ui.rngWidth.addEventListener('input',()=>{
+  SW=parseFloat(ui.rngWidth.value)/1000; HW=SW/2;
+  ui.valWidth.textContent=ui.rngWidth.value+' mm';
 });
 document.querySelectorAll('.ts').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.ts').forEach(x=>x.classList.remove('sel'));
