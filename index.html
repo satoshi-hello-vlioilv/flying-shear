@@ -122,7 +122,7 @@
       <div><b>パレット搬出</b><span class="v" id="stPallet">0 回</span></div>
     </div>
 
-    <div id="hint">ドラッグ：回転 ／ ホイール・ピンチ：ズーム ／ ダブルクリック：全体表示</div>
+    <div id="hint">ドラッグ：回転 ／ 右ドラッグ：平行移動 ／ ホイール・ピンチ：ズーム ／ ダブルクリック：全体表示</div>
   </div>
 
   <aside id="panel">
@@ -166,12 +166,13 @@
     <div class="sec">
       <h2>ライン構成（材料の流れ順）</h2>
       <ul class="legend">
-        <li><span class="dot" style="background:#96a4b4"></span><div><b>① アンコイラー</b><br><span>コイル材を巻き出す。スナバロールが緩み止めとしてコイル外周に追従</span></div></li>
+        <li><span class="dot" style="background:#96a4b4"></span><div><b>① アンコイラー</b><br><span>ピット設置。コイル上側からパスライン高さ付近で払い出し、スナバロールが緩み止めとして外周に追従</span></div></li>
+        <li><span class="dot" style="background:#7a8fa6"></span><div><b>ルーパー</b><br><span>ピットに貯留ループを設け、薄板の張力変動やシャー切断時の振動が上流へ波及するのを抑制</span></div></li>
         <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のロールで巻きぐせ・反りを矯正</span></div></li>
         <li><span class="dot" style="background:#5b7186"></span><div><b>③ 測長ピンチロール</b><br><span>板に密着して送り長さを計測</span></div></li>
-        <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同速で走行し、クランプで板を固定して上刃・下刃のすれ違いで剪断</span></div></li>
-        <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインと同じ速度で搬送し、そのままスタッカーへ送る</span></div></li>
-        <li><span class="dot" style="background:#4a8a86"></span><div><b>⑥ スタッカー</b><br><span>ストッパ手前で減速・停止させ積載（8枚で搬出）</span></div></li>
+        <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同速で走行し、クランプで固定後、出側配置の下刃が上昇して固定上刃とすれ違うアップカット剪断</span></div></li>
+        <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインより約1割増速して搬送し、切板間にギャップを形成</span></div></li>
+        <li><span class="dot" style="background:#4a8a86"></span><div><b>⑥ スタッカー</b><br><span>板幅に追従するエッジガイドロール上を搬送し、定位置でロールが退避して落下積載。リフトは自動下降し受取高さ一定（8枚で搬出）</span></div></li>
       </ul>
     </div>
 
@@ -183,10 +184,10 @@
           <ol>
             <li>測長ロールで送り長さを計測</li>
             <li>目標長さの直前でキャリッジが加速し、板速度に同期</li>
-            <li>クランプが板を固定し、同期を保ったまま上刃が降下 → 下刃とのすれ違いで剪断</li>
+            <li>クランプが板を固定し、同期を保ったまま下刃がライン速度と同調した機械式駆動で上昇（アップカット）→ 固定上刃とのすれ違いで剪断</li>
             <li>刃・クランプが開放後、キャリッジは減速・後退して原位置へ復帰</li>
           </ol>
-          <p>切断された板はランアウトコンベアでライン速度のまま搬送され、スタッカーのストッパ手前で減速・停止して積み重ねられます。</p>
+          <p>切断された板はランアウトコンベアで約1割増速されて前の板から引き離され、スタッカーのエッジガイドロール上をストッパまで搬送された後、ガイドロールの退避により一定高さのパイル上面へ落下・積載されます。</p>
           <p class="note">※板厚・寸法・速度は、動作を見やすくするため誇張しています（1目盛=1m相当）。<br>3D描画: Three.js r149（MIT License, 本ファイルに同梱）</p>
         </div>
       </details>
@@ -218,22 +219,38 @@ const XH = -2.50;           // キャリッジ原位置
 const ACC = 6.0;            // キャリッジ加減速度
 const VR  = 2.2;            // 復帰速度上限
 const SETTLE  = 0.12;       // 同期後の整定時間
-const BLADE_T = 0.22;       // 刃の下降(=上昇)時間
-const FIRE_K  = 0.81;       // 下降ストロークのうち刃先が板上面に達する割合
+const OUT_K = 1.12;         // 出側増速率（切板間ギャップ形成。板・ロールとも同じ速度で動く）
+// アップカットシャー：上刃はクロスヘッドに固定、下刃（出側配置）が上昇して剪断する
+const UB_BOT = PL + 0.04;              // 固定上刃の下端
+const LB_LO = PL - TH - 0.06;          // 下刃上端（待機位置：板下面より下）
+const LB_HI = PL + 0.04;               // 下刃上端（上昇端：板上面を抜けて上刃とすれ違う）
+const STROKE = LB_HI - LB_LO;
+const FIRE_LEN = PL - LB_LO;           // 下刃が板上面を抜けるまでの上昇量（=剪断完了点）
 const CL_MAX = 8.0;         // 切断長さの最大値（スタッカー寸法の基準）
 const XSTOP = 18.5;         // スタッカーストッパ位置
-const PALLET_TOP = 0.72;
 const PILE_MAX = 8;
+// スタッカー：エッジガイドロール上を搬送し、ロール退避で落下積載。リフトが自動下降し受取高さ一定
+const RECEIVE_Y = 1.15;                    // パイル上面の受け取り高さ（常に一定）
+const GUIDE_RY = PL - TH - 0.045;          // ガイドロール中心（ロール上面=板下面）
+const PLT_TOP_L = RECEIVE_Y - 0.003 - TH;  // 空パレット上面（リフト原点位置での高さ）
 const STK_LEN = CL_MAX + 0.4;        // パレット等の全長（最大切断長＋余裕）
 const STK_RIGHT = XSTOP + 0.1;       // ストッパ側の端
 const STK_LEFT  = STK_RIGHT - STK_LEN;
 const STK_CX = (STK_LEFT + STK_RIGHT)/2;
-const COIL_X = -16, COIL_CY = 3.0, COIL_LEN = 2.6;
+const COIL_X = -16, COIL_LEN = 2.6;
 const COIL_RMAX = 1.45, COIL_RMIN = 0.80;
+// アンコイラーはピット設置とし、満巻きコイルの頂部（払い出し点）がパスライン高さに来るようにする
+const COIL_CY = PL - COIL_RMAX;
+const PIT_FLOOR = -1.45;             // アンコイラーピット床面
+const PIT_HALF_X = 1.8, PIT_HALF_Z = 2.3;
+// ルーパー（ループピット）：薄板加工時の張力変動・振動を吸収する貯留ループ
+const LOOP_X = -12.9;
+const LOOP_HALF_X = 0.85, LOOP_HALF_Z = 1.3;
+const LOOP_PIT_FLOOR = -0.35;
+const LOOP_BOTTOM_Y = 0.15;          // ループ最下点（ループロール中心高さ）
 const PITCH = TH + 0.004;   // 積載ピッチ（面の重なりによるちらつき防止）
 const LEV_ENTRY = -11.35;   // レベラー入側（板が水平になる点）
-const BLADE_UP  = PL + 0.55;         // 上刃下端（上昇位置）
-const BLADE_DN  = PL - TH - 0.07;    // 上刃下端（下降位置）
+const LOOP_ENTRY = -13.9;   // ルーパー手前で板が水平（PL）になる点
 
 /* ---------- シミュレーション状態 ---------- */
 const S = {
@@ -241,9 +258,10 @@ const S = {
   v:20/60, CL:3.0,
   phase:'FEED', xF:-3, lastCutRef:-3,
   xc:XH, vc:0,
-  blade:0, clamp:0, bladeT:0, settleT:0, cutDone:false,
+  blade:0, bladePos:0, bladeDir:1, clamp:0, settleT:0, cutDone:false,
   sheets:[], pileLens:[], flashes:[],
   cutCount:0, lastLen:0, palletCount:0, palletAnim:null,
+  railK:0, railPhase:'up', dropArms:null, liftOff:0,
   coilR:COIL_RMAX, coilPh:0
 };
 
@@ -252,12 +270,13 @@ function resetSim(){
   clearPile();
   Object.assign(S,{
     phase:'FEED', xF:-3, lastCutRef:-3, xc:XH, vc:0,
-    blade:0, clamp:0, bladeT:0, settleT:0, cutDone:false,
+    blade:0, bladePos:0, bladeDir:1, clamp:0, settleT:0, cutDone:false,
     sheets:[], pileLens:[], flashes:[],
     cutCount:0, lastLen:0, palletCount:0, palletAnim:null,
+    railK:0, railPhase:'up', dropArms:null, liftOff:0,
     coilR:COIL_RMAX, coilPh:0
   });
-  pileGroup.position.z = 0;
+  palletGrp.position.z = 0;
 }
 
 /* ---------- 物理ステップ ---------- */
@@ -273,11 +292,14 @@ function step(dt){
   /* キャリッジ状態機械 */
   switch(S.phase){
     case 'FEED':{
-      // 同期完了→整定→刃先が板に達するまでの移動量から起動タイミングを逆算
-      const ts=v/ACC, ds=v*v/(2*ACC);
-      const T = ts + SETTLE + FIRE_K*BLADE_T;
-      const D = ds + v*(SETTLE + FIRE_K*BLADE_T);
-      if(S.xF >= S.CL + XH + D - v*T){ S.phase='SYNC'; S.settleT=0; }
+      // 同期完了→整定→下刃が板上面を抜けるまでの移動量から起動タイミングを逆算
+      // 下刃昇降速度=ライン速度（機械式同調）なので tFire = FIRE_LEN/v
+      if(v > 1e-4){
+        const ts=v/ACC, ds=v*v/(2*ACC);
+        const T = ts + SETTLE + FIRE_LEN/v;
+        const D = ds + v*SETTLE + FIRE_LEN;
+        if(S.xF >= S.CL + XH + D - v*T){ S.phase='SYNC'; S.settleT=0; }
+      }
       break;
     }
     case 'SYNC':{
@@ -285,27 +307,26 @@ function step(dt){
       S.xc += S.vc*dt;
       if(S.vc >= v-1e-6){
         S.settleT += dt;
-        if(S.settleT >= SETTLE){ S.phase='CUT'; S.bladeT=0; S.cutDone=false; }
+        if(S.settleT >= SETTLE){ S.phase='CUT'; S.bladePos=0; S.bladeDir=1; S.cutDone=false; }
       }
       break;
     }
     case 'CUT':{
+      // 下刃はライン速度と同じ速度で昇降する（機械式カム同調。ラインが止まれば刃も止まる）
       S.vc = v; S.xc += v*dt;
-      S.bladeT += dt;
-      if(!S.cutDone && S.bladeT >= FIRE_K*BLADE_T){
+      S.bladePos += S.bladeDir * v * dt;
+      if(!S.cutDone && S.bladeDir > 0 && S.bladePos >= FIRE_LEN){
         S.cutDone = true;
-        // 切断面は上刃の上流側面。上刃厚み分を挟んで材料が分離する
-        // （下降中の刃は常にこの隙間内を通り、材料と干渉しない）
+        // 切断面は上刃(上流側)・下刃(出側)の刃間ギャップ。材料はその間で分離する
         const trueLen = S.xF - S.xc;
-        spawnSheet(S.xc + 0.115, S.xF - (S.xc + 0.115), v);
-        S.xF = S.xc + 0.005; S.lastCutRef = S.xF;
+        spawnSheet(S.xc + 0.02, S.xF - (S.xc + 0.02), v);
+        S.xF = S.xc - 0.005; S.lastCutRef = S.xF;
         S.lastLen = trueLen; S.cutCount++;
-        S.flashes.push({x:S.xc + 0.06, t:0});
+        S.flashes.push({x:S.xc, t:0});
       }
-      S.blade = S.bladeT < BLADE_T
-        ? S.bladeT/BLADE_T
-        : Math.max(0, 1-(S.bladeT-BLADE_T)/BLADE_T);
-      if(S.bladeT >= 2*BLADE_T){ S.phase='RETURN'; S.blade=0; }
+      if(S.bladeDir > 0 && S.bladePos >= STROKE){ S.bladePos = STROKE; S.bladeDir = -1; }
+      if(S.bladeDir < 0 && S.bladePos <= 0){ S.bladePos = 0; S.phase='RETURN'; }
+      S.blade = S.bladePos/STROKE;
       break;
     }
     case 'RETURN':{
@@ -321,36 +342,69 @@ function step(dt){
   const clampTgt = (S.phase==='CUT' || (S.phase==='SYNC' && S.vc>=v-1e-6)) ? 1 : 0;
   S.clamp += Math.sign(clampTgt-S.clamp)*Math.min(Math.abs(clampTgt-S.clamp), dt/0.15);
 
-  /* 切板：追突防止つき搬送 → ストッパ手前で減速 → 落下積載 */
+  /* 切板：出側は OUT_K 倍に増速して搬送（板・ロールとも同速）→ ストッパで停止 → ガイドロール退避で落下積載 */
+  const vOut = v * OUT_K;
   let dropInProgress = S.sheets.some(s=>s.drop);
+  const gate = STK_LEFT - 0.1;            // ガイドロール退避中は後続をこの手前で待機させる
   let limit = XSTOP;                      // この位置より先端は進めない
   for(let i=0;i<S.sheets.length;i++){
     const sh = S.sheets[i];
     if(sh.drop){
       sh.vy += 6.5*dt;
       sh.y  -= sh.vy*dt;
-      const target = PALLET_TOP + 0.003 + S.pileLens.length*PITCH + TH;
+      // 受け取り高さは常に一定（リフトが積載分だけ下がっているため）
+      const target = S.liftOff + PLT_TOP_L + 0.003 + S.pileLens.length*PITCH + TH;
       if(sh.y <= target){
         sh.y = target;
         landSheet(i); i--;
         dropInProgress = false;
+        S.railPhase = 'raise';            // 着地→ガイドロール復帰
       }
       continue;                           // 落下中は搬送レーン外
     }
+    let lim = limit;
+    if((S.railPhase !== 'up' || S.palletAnim) && !sh.staged){
+      // 退避中の後続板：スタッカー入口（既に入っている板は退避区間の手前）で待つ
+      lim = Math.min(lim, (sh.x + sh.len > gate + 0.001 && S.dropArms) ? S.dropArms.x0 - 0.08 : gate);
+    }
     const front = sh.x + sh.len;
-    const dist  = limit - front;
+    const dist  = lim - front;
     if(dist <= 0.004){
-      sh.x = limit - sh.len; sh.spd = 0;
-      if(limit === XSTOP && !S.palletAnim && !dropInProgress){
-        sh.drop = true; sh.vy = 0; dropInProgress = true;
+      sh.spd = 0;
+      if(lim === XSTOP && !sh.staged && S.railPhase === 'up' && !S.palletAnim && !dropInProgress){
+        sh.staged = true;                 // 定位置到達→この板の下のガイドロールだけを退避させる
+        S.railPhase = 'lower';
+        S.dropArms = {x0: XSTOP - sh.len - 0.3};
       }
     }else{
-      const vAllow = Math.max(0.35, Math.sqrt(2*5*dist)); // ソフトストップ
-      sh.spd = Math.min(sh.spd + 4*dt, v, vAllow);
+      const vAllow = Math.max(0.3, Math.sqrt(2*5*dist)); // ソフトストップ
+      sh.spd = Math.min(sh.spd + 4*dt, vOut, vAllow);
       sh.x += sh.spd*dt;
-      if(sh.x + sh.len > limit) sh.x = limit - sh.len;
+      if(sh.x + sh.len > lim) sh.x = lim - sh.len;
     }
     limit = sh.x - 0.04;                  // 後続はこの尾端を追い越せない
+  }
+
+  /* ガイドロール昇降の状態機械（支持が抜けた時点[railK≈0.65]で板は落下を開始する） */
+  if(S.railPhase === 'lower'){
+    S.railK = Math.min(1, S.railK + dt/0.3);
+    if(S.railK >= 0.65){
+      const st = S.sheets.find(s=>s.staged);
+      if(st){ st.staged = false; st.drop = true; st.vy = 0; }
+    }
+    if(S.railK >= 1){
+      S.railPhase = 'down';
+      if(!S.sheets.some(s=>s.drop) && !S.sheets.some(s=>s.staged)) S.railPhase = 'raise';
+    }
+  }else if(S.railPhase === 'raise'){
+    S.railK = Math.max(0, S.railK - dt/0.3);
+    if(S.railK <= 0){ S.railPhase = 'up'; S.dropArms = null; }
+  }
+
+  /* リフト自動下降：積載枚数に応じて下がり、受け取り高さを一定に保つ */
+  if(!S.palletAnim){
+    const liftTgt = -S.pileLens.length * PITCH;
+    S.liftOff += (liftTgt - S.liftOff) * Math.min(1, dt*3);
   }
 
   /* パレット搬出 */
@@ -358,7 +412,7 @@ function step(dt){
     S.palletAnim.t += dt/1.4;
     if(S.palletAnim.t >= 1){
       S.palletAnim = null; clearPile(); S.palletCount++;
-      pileGroup.position.z = 0;
+      palletGrp.position.z = 0;
     }
   }
 
@@ -444,7 +498,9 @@ const M = {
   floor : mat(0x1f242b, .95, .05, .1),
   aisle : mat(0x2a3038, .95, .05, .1),
   zone  : mat(0x3f3c2e, .95, .05, .12),
-  hazard: mat(0xa88a34, .8, .1, .15)
+  hazard: mat(0xa88a34, .8, .1, .15),
+  pitWall: mat(0x262c33, .9, .1, .1),
+  pitFloor: mat(0x1a1f25, .95, .05, .08)
 };
 
 /* ---------- 形状ヘルパ ---------- */
@@ -456,26 +512,82 @@ function addBox(parent,x,y,z,sx,sy,sz,material,shadow=true){
   parent.add(m);
   return m;
 }
-/* Z軸円柱（ロール類）。dir≠0なら回転登録＋回転マーカ付与 */
-function addRollZ(parent,x,y,z,r,len,material,dir=0,kind='line',seg=24){
+/* 床ピット（床面＋四方の壁）。cx中心・±halfX×±halfZの穴に対応させて使う */
+function addPit(cx, halfX, halfZ, floorY){
+  const g = new THREE.Group(); scene.add(g);
+  const h = -floorY;
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(halfX*2, halfZ*2), M.pitFloor);
+  fl.rotation.x = -Math.PI/2; fl.position.set(cx, floorY, 0); fl.receiveShadow = true;
+  g.add(fl);
+  addBox(g, cx, floorY+h/2, -halfZ, halfX*2, h, 0.1, M.pitWall, false);
+  addBox(g, cx, floorY+h/2,  halfZ, halfX*2, h, 0.1, M.pitWall, false);
+  addBox(g, cx-halfX, floorY+h/2, 0, 0.1, h, halfZ*2, M.pitWall, false);
+  addBox(g, cx+halfX, floorY+h/2, 0, 0.1, h, halfZ*2, M.pitWall, false);
+  return g;
+}
+/* Z軸円柱（ロール類）。バレル＋軸（axleExt>0で両端に軸を突き出し、軸受に通す）。
+   dir≠0なら回転登録＋回転マーカ付与。グループ全体が軸まわりに回転する */
+function addRollZ(parent,x,y,z,r,len,material,dir=0,kind='line',seg=24,axleExt=0){
+  const grp = new THREE.Group();
+  grp.position.set(x,y,z);
+  parent.add(grp);
   const g = new THREE.CylinderGeometry(r,r,len,seg);
   g.rotateX(Math.PI/2);
   const m = new THREE.Mesh(g, material);
-  m.position.set(x,y,z);
   m.castShadow = true; m.receiveShadow = true;
-  parent.add(m);
-  if(dir!==0){
-    const mk = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.035, len*0.9), M.mark);
-    mk.position.set(0, r*0.995, 0);
-    m.add(mk);
-    spinners.push({mesh:m, r, dir, kind});
+  grp.add(m);
+  if(axleExt>0){
+    const ar = Math.min(r*0.5, 0.055);
+    const ag = new THREE.CylinderGeometry(ar, ar, len+axleExt*2, 10);
+    ag.rotateX(Math.PI/2);
+    const ax = new THREE.Mesh(ag, M.steelL);
+    ax.castShadow = true;
+    grp.add(ax);
   }
-  return m;
+  if(dir!==0){
+    const mk = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.03, len*0.9), M.mark);
+    mk.position.set(0, r*0.99, 0);
+    m.add(mk);
+    spinners.push({mesh:grp, r, dir, kind});
+  }
+  return grp;
+}
+/* ロールテーブル：側板2枚＋脚＋軸付きロール＋軸受キャップ。バレルは側板と干渉しない */
+function rollerTable(rxs, kind){
+  const g = new THREE.Group(); scene.add(g);
+  const x0 = Math.min(...rxs), x1 = Math.max(...rxs);
+  const cx = (x0+x1)/2, plen = (x1-x0)+0.3;
+  const zP = 1.32, rcY = PL-TH-0.09;
+  addBox(g, cx, 1.40, -zP, plen, 0.26, 0.08, M.steel);   // 側板（上端は板下面より下）
+  addBox(g, cx, 1.40,  zP, plen, 0.26, 0.08, M.steel);
+  const legs = plen > 3 ? [x0+0.15, cx, x1-0.15] : [x0+0.15, x1-0.15];
+  for(const lx of legs){
+    addBox(g, lx, 0.635, -zP, 0.12, 1.27, 0.08, M.steelD);
+    addBox(g, lx, 0.635,  zP, 0.12, 1.27, 0.08, M.steelD);
+    addBox(g, lx, 0.05, 0, 0.3, 0.1, 2.8, M.dark);
+  }
+  for(const rx of rxs){
+    addRollZ(g, rx, rcY, 0, 0.09, 2.3, M.roller, -1, kind, 14, 0.27);
+    addBox(g, rx, rcY, -(zP+0.07), 0.12, 0.16, 0.06, M.dark);  // 軸受キャップ
+    addBox(g, rx, rcY,  (zP+0.07), 0.12, 0.16, 0.06, M.dark);
+  }
+  return g;
 }
 
-/* ---------- 床 ---------- */
+/* ---------- 床（アンコイラー・ルーパーピット分の開口を持たせる） ---------- */
 {
-  const gnd = new THREE.Mesh(new THREE.PlaneGeometry(52, 20), M.floor);
+  const floorShape = new THREE.Shape();
+  floorShape.moveTo(-26,-10); floorShape.lineTo(26,-10);
+  floorShape.lineTo(26,10);   floorShape.lineTo(-26,10); floorShape.lineTo(-26,-10);
+  const addHole=(cx,cz,hx,hz)=>{
+    const p = new THREE.Path();
+    p.moveTo(cx-hx,cz-hz); p.lineTo(cx+hx,cz-hz);
+    p.lineTo(cx+hx,cz+hz); p.lineTo(cx-hx,cz+hz); p.lineTo(cx-hx,cz-hz);
+    floorShape.holes.push(p);
+  };
+  addHole(COIL_X, 0, PIT_HALF_X, PIT_HALF_Z);
+  addHole(LOOP_X, 0, LOOP_HALF_X, LOOP_HALF_Z);
+  const gnd = new THREE.Mesh(new THREE.ShapeGeometry(floorShape), M.floor);
   gnd.rotation.x = -Math.PI/2; gnd.receiveShadow = true;
   scene.add(gnd);
   const grid = new THREE.GridHelper(52, 26, 0x333d48, 0x272e37);
@@ -487,21 +599,24 @@ function addRollZ(parent,x,y,z,r,len,material,dir=0,kind='line',seg=24){
     p.rotation.x = -Math.PI/2; p.position.set(x,y,z); p.receiveShadow = true;
     scene.add(p);
   };
-  mkPlane(41, 6.2, 0.8, 0, 0.006, M.aisle);
+  mkPlane(32, 6.2, 4.7, 0, 0.006, M.aisle);            // ピット区間を避けて敷設
   mkPlane(7.6, 6.2, -0.25, 0, 0.010, M.zone);          // シャー安全域
   mkPlane(41, 0.16, 0.8, -3.18, 0.014, M.hazard);
   mkPlane(41, 0.16, 0.8,  3.18, 0.014, M.hazard);
+  addPit(COIL_X, PIT_HALF_X, PIT_HALF_Z, PIT_FLOOR);   // アンコイラーピット
+  addPit(LOOP_X, LOOP_HALF_X, LOOP_HALF_Z, LOOP_PIT_FLOOR); // ルーパーピット
 }
 
 /* ---------- ① アンコイラー ---------- */
 let coilMesh, mandrel, snubGrp, snubRoll;
 {
   const g = new THREE.Group(); scene.add(g);
-  addBox(g, COIL_X, 0.28, 0, 2.6, 0.56, 4.0, M.steelD);
-  addBox(g, COIL_X, 1.9, -1.8, 1.1, 2.7, 0.55, M.steel);
-  addBox(g, COIL_X, 1.9,  1.8, 1.1, 2.7, 0.55, M.steel);
-  addBox(g, COIL_X, 3.25, -1.8, 1.2, 0.5, 0.6, M.steelD); // 軸受
-  addBox(g, COIL_X, 3.25,  1.8, 1.2, 0.5, 0.6, M.steelD);
+  const armBot = PIT_FLOOR+0.1, armTop = COIL_CY+0.25, armCy = (armBot+armTop)/2;
+  addBox(g, COIL_X, PIT_FLOOR+0.28, 0, 2.6, 0.56, 4.0, M.steelD);          // 基礎（ピット床に設置）
+  addBox(g, COIL_X, armCy, -1.8, 1.1, armTop-armBot, 0.55, M.steel);
+  addBox(g, COIL_X, armCy,  1.8, 1.1, armTop-armBot, 0.55, M.steel);
+  addBox(g, COIL_X, COIL_CY+0.25, -1.8, 1.2, 0.5, 0.6, M.steelD); // 軸受
+  addBox(g, COIL_X, COIL_CY+0.25,  1.8, 1.2, 0.5, 0.6, M.steelD);
   { // マンドレル
     const mg = new THREE.CylinderGeometry(0.45, 0.45, 4.2, 16);
     mg.rotateX(Math.PI/2);
@@ -531,11 +646,12 @@ let coilMesh, mandrel, snubGrp, snubRoll;
     coilMesh.castShadow = true;
     g.add(coilMesh);
   }
-  { // スナバアーム（コイル外周に追従して緩みを押さえる）
-    addBox(g, -18.1, 2.35, 0, 0.4, 4.7, 0.4, M.steel);      // 支柱
-    addBox(g, -18.1, 4.75, 0, 0.55, 0.5, 0.6, M.steelD);    // ピボットブラケット
+  { // スナバアーム（コイル外周に追従して緩みを押さえる）。支柱の根本はピット外の通常床面に立つ
+    const SNUB_PX=-18.1, SNUB_PY=COIL_CY+1.7;
+    addBox(g, SNUB_PX, SNUB_PY/2, 0, 0.4, SNUB_PY, 0.4, M.steel);   // 支柱
+    addBox(g, SNUB_PX, SNUB_PY+0.05, 0, 0.55, 0.5, 0.6, M.steelD); // ピボットブラケット
     snubGrp = new THREE.Group();
-    snubGrp.position.set(-18.1, 4.7, 0);
+    snubGrp.position.set(SNUB_PX, SNUB_PY, 0);
     g.add(snubGrp);
     addBox(snubGrp, 1.3, 0, 0, 2.6, 0.16, 0.3, M.orange);
     addBox(snubGrp, -0.4, 0, 0, 0.7, 0.32, 0.36, M.steelD); // カウンタウェイト
@@ -545,13 +661,31 @@ let coilMesh, mandrel, snubGrp, snubRoll;
 
 /* スナバアームの接触角を幾何学的に解く */
 function updateSnubber(dt){
-  const Px=-18.1, Py=4.7, Larm=2.6, rr=0.16;
+  const Px=-18.1, Py=COIL_CY+1.7, Larm=2.6, rr=0.16;
   const dx=COIL_X-Px, dy=COIL_CY-Py;
   const d=Math.hypot(dx,dy);
   const reach=S.coilR+rr;
   const cosT=Math.min(1, Math.max(-1, (d*d+Larm*Larm-reach*reach)/(2*d*Larm)));
   snubGrp.rotation.z = Math.atan2(dy,dx) + Math.acos(cosT);
-  snubRoll.rotation.z -= (S.v/rr)*dt;   // コイル外周と転がり接触
+  snubRoll.rotation.z += (S.v/rr)*dt;   // コイル外周と転がり接触（コイル表面は+x向きに動く）
+}
+
+/* ---------- ①.5 ルーパー（薄板の張力変動・シャー振動を吸収する貯留ループ）
+   ピット両縁のデフレクタロール（板はロール上面に接線接触して垂下）＋非接触の自由ループ ---------- */
+{
+  const g = new THREE.Group(); scene.add(g);
+  for(const sgn of [-1, 1]){
+    const rx = LOOP_X + sgn*LOOP_HALF_X;
+    // デフレクタロール：上面 = 板下面（接線接触。ループはここから内側へ垂下する）
+    addRollZ(g, rx, PL-TH-0.09, 0, 0.09, 2.3, M.roller, -1, 'line', 14, 0.35);
+    for(const zs of [-1.45, 1.45]){      // ピット外の床に立つ軸受ペデスタル
+      addBox(g, rx, 0.725, zs, 0.14, 1.45, 0.14, M.steelD);
+      addBox(g, rx, 1.45, zs, 0.18, 0.16, 0.18, M.dark);
+    }
+  }
+  // ループ深さ検出センサ支柱（演出）
+  addBox(g, LOOP_X, 1.0, -1.7, 0.08, 2.0, 0.08, M.steel);
+  addBox(g, LOOP_X, 1.95, -1.7, 0.3, 0.12, 0.12, M.orange);
 }
 
 /* ---------- ② レベラー ---------- */
@@ -563,11 +697,11 @@ function updateSnubber(dt){
   addBox(g, -10, 2.78, 0, 3.4, 0.3, 3.08, M.levBlu);
   for(const jx of [-11.1,-10.1,-9.1])                     // 圧下ジャッキ
     addBox(g, jx, 3.1, 0, 0.24, 0.35, 0.24, M.steelD);
-  // 下ロール4本（板下面に接触）／上ロール3本（板上面に接触）：千鳥配置
+  // 下ロール4本（板下面に接触）／上ロール3本（板上面に接触）：千鳥配置。軸は側板の軸受に通す
   for(const rx of [-11.1,-10.35,-9.6,-8.85])
-    addRollZ(g, rx, PL-TH-0.22, 0, 0.22, 2.6, M.roller, -1);
+    addRollZ(g, rx, PL-TH-0.22, 0, 0.22, 2.6, M.roller, -1, 'line', 24, 0.25);
   for(const rx of [-10.72,-9.97,-9.22])
-    addRollZ(g, rx, PL+0.22, 0, 0.22, 2.6, M.roller, +1);
+    addRollZ(g, rx, PL+0.22, 0, 0.22, 2.6, M.roller, +1, 'line', 24, 0.25);
   // 入側ガイド（板を挟まず上下に逃げを持つ）
   addBox(g, -11.55, 1.74, 0, 0.3, 0.05, 2.6, M.steel);
   addBox(g, -11.55, 1.42, 0, 0.34, 0.08, 2.6, M.steel);
@@ -580,24 +714,17 @@ function updateSnubber(dt){
   addBox(g, -6, 1.7, 1.55, 1.3, 2.1, 0.24, M.steel);
   addBox(g, -6, 0.95, -1.55, 1.3, 0.6, 0.24, M.steel);    // カットアウェイ側(デフォルト視点)
   addBox(g, -6.9, 1.19, 1.9, 0.6, 0.6, 0.5, M.dark);      // 駆動モータ
-  addRollZ(g, -6, PL-TH-0.35, 0, 0.35, 2.6, M.roller, -1);
-  addRollZ(g, -6, PL+0.35,   0, 0.35, 2.6, M.roller, +1);
+  addRollZ(g, -6, PL-TH-0.35, 0, 0.35, 2.6, M.roller, -1, 'line', 24, 0.32);
+  addRollZ(g, -6, PL+0.35,   0, 0.35, 2.6, M.roller, +1, 'line', 24, 0.32);
 }
 
-/* ---------- 入側・出側テーブル（小径アイドラで板を支持） ---------- */
-{
-  const g = new THREE.Group(); scene.add(g);
-  addBox(g, -4.4, 1.22, 0, 1.7, 0.34, 2.8, M.steel);
-  for(const rx of [-5.0,-4.4,-3.8])
-    addRollZ(g, rx, PL-TH-0.09, 0, 0.09, 2.5, M.roller, -1, 'line', 14);
-  // 出側テーブル：シャー出口～ランアウトコンベア間を切れ目なく支持
-  // （キャリッジ最大到達点[約x=-1.5]より手前で途切れさせ、キャリッジ本体と干渉しないようにする）
-  addBox(g, 1.275, 1.22, 0, 4.95, 0.34, 2.8, M.steel);
-  for(const rx of [-1.2,-0.6,0,0.6,1.2,1.8,2.4,3.0,3.6])
-    addRollZ(g, rx, PL-TH-0.09, 0, 0.09, 2.5, M.roller, -1, 'conv', 14);
-}
+/* ---------- 入側・出側テーブル（軸受支持の小径アイドラで板を支持） ---------- */
+rollerTable([-5.0,-4.4,-3.8], 'line');
+// 出側テーブル：シャー出口～ランアウトコンベア間を切れ目なく支持
+// （キャリッジ最大到達点より手前で途切れさせ、キャリッジ本体と干渉しない）
+rollerTable([-1.2,-0.6,0,0.6,1.2,1.8,2.4,3.0,3.6], 'conv');
 
-/* ---------- ④ フライングシャー ---------- */
+/* ---------- ④ フライングシャー（アップカット：上刃固定・下刃上昇。下刃は出側配置） ---------- */
 let carGrp, bladeGrp, clampGrp, carWheels=[];
 {
   addBox(scene, -0.25, 0.09, 0, 6.9, 0.18, 4.0, M.dark);   // 基礎
@@ -614,33 +741,45 @@ let carGrp, bladeGrp, clampGrp, carWheels=[];
     addBox(carGrp, 0, 2.07, zx, 0.85, 2.5, 0.46, M.yellow); // 支柱
   }
   addBox(carGrp, 0, 3.32, 0, 0.95, 0.55, 3.95, M.yellow);   // クロスヘッド
-  addBox(carGrp, 0, 1.2, 0, 1.1, 0.5, 3.3, M.yellow);       // 下部ベッド
-  addBox(carGrp, -0.08, 1.49, 0, 0.14, 0.08, 2.9, M.blade); // 下刃（上面=板下面-0.01）
-  addBox(carGrp, -0.48, 1.4925, 0, 0.4, 0.085, 2.9, M.steel); // クランプ受けアンビル
-  // 油圧シリンダ本体
-  addBox(carGrp, 0, 3.75, -0.8, 0.34, 0.7, 0.34, M.steelD);
-  addBox(carGrp, 0, 3.75,  0.8, 0.34, 0.7, 0.34, M.steelD);
 
-  // 上刃ユニット（原点=刃先下端。下刃と x方向にすれ違い配置）
+  // 上刃（固定）：クロスヘッドから吊ったホルダの下端。刃先下端=UB_BOT で動かない
+  addBox(carGrp, -0.07, 2.64, 0, 0.5, 0.81, 3.2, M.orange);            // 上刃ホルダ
+  addBox(carGrp, -0.07, UB_BOT+0.3, 0, 0.12, 0.6, 2.9, M.blade);       // 固定上刃（下端=UB_BOT）
+
+  // 入側アンビル（クランプ受け・板支持。上面=板下面-0.005。下刃スロットの上流壁を兼ねる）
+  addBox(carGrp, -0.425, 1.27, 0, 0.65, 0.53, 3.0, M.steel);
+  // 出側ミニテーブル（切断直後の切板尾端を支持。下刃スロットの下流壁を兼ねる）
+  addBox(carGrp, 0.4, 1.27, 0, 0.4, 0.53, 3.0, M.steel);
+
+  // 下刃駆動部：ベッド内の機械式駆動（昇降速度=ライン速度で同調）
+  addBox(carGrp, 0.07, 0.62, 0, 0.9, 0.5, 3.3, M.yellow);              // 駆動ハウジング
+  addBox(carGrp, 0.07, 1.05, -1.72, 1.0, 0.9, 0.3, M.yellow);          // 下刃スロット側枠
+  addBox(carGrp, 0.07, 1.05,  1.72, 1.0, 0.9, 0.3, M.yellow);
+
+  // 下刃ユニット（原点=刃先上端。上刃の出側に配置し、上昇して上刃とすれ違う）
   bladeGrp = new THREE.Group(); carGrp.add(bladeGrp);
-  addBox(bladeGrp, 0.06, 0.35, 0, 0.10, 0.7, 2.9, M.blade);
-  addBox(bladeGrp, 0, 0.95, 0, 0.46, 0.5, 3.2, M.orange);   // 刃ホルダ
-  for(const rz of [-0.8, 0.8]){
-    const rg = new THREE.CylinderGeometry(0.07, 0.07, 0.95, 10);
+  addBox(bladeGrp, 0.07, -0.275, 0, 0.12, 0.55, 2.9, M.blade);         // 下刃（上端=原点）
+  addBox(bladeGrp, 0.07, -0.75, 0, 0.24, 0.4, 3.0, M.orange);          // 下刃ホルダ（スロット内を昇降）
+  for(const rz of [-1.0, 1.0]){
+    const rg = new THREE.CylinderGeometry(0.06, 0.06, 0.4, 10);
     const rod = new THREE.Mesh(rg, M.steelL);
-    rod.position.set(0, 1.475, rz); rod.castShadow = true;
-    bladeGrp.add(rod);          // ピストンロッド（シリンダ本体に出入りする）
+    rod.position.set(0.07, -0.95, rz); rod.castShadow = true;
+    bladeGrp.add(rod);          // 昇降ロッド（駆動ハウジングに出入り）
   }
 
-  // クランプ（原点=パッド下面。切断中に板上面を押さえる）
+  // クランプ（原点=パッド下面。切断中に上刃の上流側で板上面を押さえる）
   clampGrp = new THREE.Group(); carGrp.add(clampGrp);
-  addBox(clampGrp, 0, 0.06, 0, 0.36, 0.12, 2.7, M.steel);
+  clampGrp.position.x = -0.45;
+  addBox(clampGrp, 0, 0.06, 0, 0.3, 0.12, 2.7, M.steel);
   for(const rz of [-0.9, 0.9]){
-    const pg = new THREE.CylinderGeometry(0.05, 0.05, 0.7, 8);
+    const pg = new THREE.CylinderGeometry(0.05, 0.05, 1.7, 8);
     const pin = new THREE.Mesh(pg, M.steelL);
-    pin.position.set(0, 0.45, rz);
+    pin.position.set(0, 0.9, rz);
     clampGrp.add(pin);
   }
+  // クランプシリンダ本体（クロスヘッド上、ロッドと同一z）
+  addBox(carGrp, -0.45, 3.7, -0.9, 0.3, 0.75, 0.3, M.steelD);
+  addBox(carGrp, -0.45, 3.7,  0.9, 0.3, 0.75, 0.3, M.steelD);
 }
 
 /* ---------- ⑤ ランアウトコンベア ---------- */
@@ -658,43 +797,68 @@ const RO_END = STK_LEFT;
     addBox(g, lx, 0.55,  1.44, 0.24, 1.1, 0.2, M.steelD);
     addBox(g, lx, 0.06, 0, 0.4, 0.12, 3.1, M.dark);
   }
-  for(let rx=4.0; rx<=RO_END; rx+=1.0)
-    addRollZ(g, rx, PL-TH-0.15, 0, 0.15, 2.76, M.roller, -1, 'conv', 18);
+  for(let rx=4.0; rx<=RO_END; rx+=1.0){
+    addRollZ(g, rx, PL-TH-0.15, 0, 0.15, 2.7, M.roller, -1, 'conv', 18, 0.3);
+    addBox(g, rx, PL-TH-0.15, -1.58, 0.14, 0.2, 0.06, M.dark);   // 軸受キャップ
+    addBox(g, rx, PL-TH-0.15,  1.58, 0.14, 0.2, 0.06, M.dark);
+  }
   addBox(g, 5.0, 1.0, -1.75, 0.5, 0.5, 0.4, M.dark);   // 駆動モータ
 }
 
-/* ---------- ⑥ スタッカー（最大切断長 STK_LEN に合わせた全長） ---------- */
-const pileGroup = new THREE.Group();
+/* ---------- ⑥ スタッカー（エッジガイドロール＋自動下降リフト） ----------
+   ・板は板幅に追従するエッジ部の小径ガイドロール上を転がってストッパまで搬送される
+   ・定位置に来ると板の下のガイドロールだけが傾倒退避し、板がパイルへ落下する
+   ・リフト（プラットフォーム＋パレット）は積載枚数に応じて自動下降し、受取高さは常に一定 */
+let liftGrp, palletGrp, pileGroup, armGroups=[], guideBeams=[];
 {
   const g = new THREE.Group(); scene.add(g);
-  const braceOff = STK_LEN*0.24, braceLen = STK_LEN*0.48;
-  // シザーリフト風テーブル
+  // 固定ベースとシザー機構（意匠。リフト最下降位置より下に収まる低型）
   addBox(g, STK_CX, 0.10, 0, STK_LEN, 0.2, 2.9, M.steelD);
-  const s1 = addBox(g, STK_CX-braceOff, 0.30, -1.2, braceLen, 0.1, 0.12, M.steel); s1.rotation.z = 0.12;
-  const s2 = addBox(g, STK_CX-braceOff, 0.30, -1.2, braceLen, 0.1, 0.12, M.steel); s2.rotation.z = -0.12;
-  const s3 = addBox(g, STK_CX+braceOff, 0.30, 1.2, braceLen, 0.1, 0.12, M.steel);  s3.rotation.z = 0.12;
-  const s4 = addBox(g, STK_CX+braceOff, 0.30, 1.2, braceLen, 0.1, 0.12, M.steel);  s4.rotation.z = -0.12;
-  addBox(g, STK_CX, 0.56, 0, STK_LEN+0.2, 0.12, 3.0, M.teal);
-  addBox(g, STK_CX, PALLET_TOP-0.05, 0, STK_LEN, 0.1, 2.6, M.pallet);   // パレット
+  for(const [ox, oz] of [[-STK_LEN*0.24,-1.2],[STK_LEN*0.24,1.2]]){
+    const s1 = addBox(g, STK_CX+ox, 0.24, oz, 2.2, 0.08, 0.12, M.steel); s1.rotation.z = 0.1;
+    const s2 = addBox(g, STK_CX+ox, 0.24, oz, 2.2, 0.08, 0.12, M.steel); s2.rotation.z = -0.1;
+  }
   // ストッパ（衝撃吸収パッド付き）
   addBox(g, XSTOP+0.17, 1.45, 0, 0.3, 1.5, 2.8, M.teal);
   addBox(g, XSTOP+0.01, 1.2, 0, 0.04, 0.9, 2.4, M.dark);
-  // サイドガイド（払い出し高さより上に配置：搬出パイルと干渉しない）
-  const guideLen = STK_LEN-0.6;
-  addBox(g, STK_CX, 1.62, -1.42, guideLen, 0.5, 0.1, M.teal);
-  addBox(g, STK_CX, 1.62,  1.42, guideLen, 0.5, 0.1, M.teal);
-  addBox(g, STK_LEFT+0.3, 1.4, -1.42, 0.15, 1.9, 0.15, M.teal);  // ガイド脚
-  addBox(g, STK_LEFT+0.3, 1.4,  1.42, 0.15, 1.9, 0.15, M.teal);
-  addBox(g, STK_RIGHT-0.3, 1.4, -1.42, 0.15, 1.9, 0.15, M.teal);
-  addBox(g, STK_RIGHT-0.3, 1.4,  1.42, 0.15, 1.9, 0.15, M.teal);
-  // 払い出しチェーンコンベア（満載パイルを横方向へ搬出する受け台）
-  for(const cx of [STK_CX-1.5, STK_CX, STK_CX+1.5]){
-    addBox(g, cx, 0.66, 3.9, 0.36, 0.12, 5.1, M.steelD);
-    addBox(g, cx, 0.30, 2.2, 0.28, 0.6, 0.24, M.steelD);
-    addBox(g, cx, 0.30, 5.6, 0.28, 0.6, 0.24, M.steelD);
+  // 門形フレーム×2（パレット搬出経路の外側に設置）＋ガイドロール吊りビーム
+  for(const px of [STK_LEFT-0.45, STK_RIGHT+0.45]){
+    addBox(g, px, 1.25, -2.15, 0.18, 2.5, 0.18, M.teal);
+    addBox(g, px, 1.25,  2.15, 0.18, 2.5, 0.18, M.teal);
+    addBox(g, px, 2.42, 0, 0.2, 0.16, 4.6, M.teal);
   }
-  addBox(g, STK_CX, 0.5, 6.55, 3.6, 0.55, 0.14, M.teal);   // 搬出側エンドストップ
-  scene.add(pileGroup);
+  for(const side of [-1, 1]){   // 吊りビーム（門形フレーム間に架け、板幅に追従して横行）
+    const bm = addBox(g, STK_CX, 2.3, 0, STK_LEN+0.9, 0.12, 0.12, M.steelD);
+    bm.userData.side = side;
+    guideBeams.push(bm);
+  }
+  // エッジガイドロールアーム（吊りビームから垂下。各アームが独立に傾倒退避する）
+  const armN = 10, ax0 = STK_LEFT+0.15, ax1 = XSTOP-0.2;
+  for(let i=0;i<armN;i++){
+    const ax = ax0 + (ax1-ax0)*i/(armN-1);
+    for(const side of [-1, 1]){
+      const grp = new THREE.Group();
+      grp.position.set(ax, GUIDE_RY, 0);   // zはupdateDynamicsで板幅追従
+      g.add(grp);
+      addBox(grp, 0, 0.42, side*0.02, 0.07, 0.75, 0.07, M.steelD);       // 吊りロッド
+      addBox(grp, 0, 0.02, side*-0.06, 0.06, 0.1, 0.2, M.steel);         // ブラケット
+      addRollZ(grp, 0, 0, side*-0.14, 0.045, 0.16, M.roller, -1, 'conv', 10);
+      armGroups.push({grp, x:ax, side});
+    }
+  }
+  // 昇降リフト：プラットフォーム（y追従）→ パレット（搬出時にz移動）→ パイル
+  liftGrp = new THREE.Group(); scene.add(liftGrp);
+  addBox(liftGrp, STK_CX, PLT_TOP_L-0.16, 0, STK_LEN+0.2, 0.12, 3.0, M.teal);  // プラットフォーム
+  palletGrp = new THREE.Group(); liftGrp.add(palletGrp);
+  addBox(palletGrp, STK_CX, PLT_TOP_L-0.05, 0, STK_LEN, 0.1, 2.6, M.pallet);   // パレット
+  pileGroup = new THREE.Group(); palletGrp.add(pileGroup);                     // 積載シート
+  // 払い出しチェーンコンベア（受け面=満載時のパレット下面高さに一致）
+  for(const cx of [STK_CX-1.5, STK_CX, STK_CX+1.5]){
+    addBox(g, cx, 0.41, 3.9, 0.36, 0.12, 5.1, M.steelD);
+    addBox(g, cx, 0.18, 2.2, 0.28, 0.36, 0.24, M.steelD);
+    addBox(g, cx, 0.18, 5.6, 0.28, 0.36, 0.24, M.steelD);
+  }
+  addBox(g, STK_CX, 0.35, 6.55, 3.6, 0.55, 0.14, M.teal);   // 搬出側エンドストップ
 }
 
 /* ---------- 切板・パイル ---------- */
@@ -706,13 +870,14 @@ function spawnSheet(x, len, spd){
   m.scale.set(len, 1, SW);
   m.castShadow = true; m.receiveShadow = true;
   sheetGroup.add(m);
-  S.sheets.push({mesh:m, x, len, spd, y:PL, drop:false, vy:0});
+  S.sheets.push({mesh:m, x, len, spd, y:PL, drop:false, vy:0, staged:false});
 }
 function landSheet(i){
   const sh = S.sheets[i];
   sheetGroup.remove(sh.mesh);
   pileGroup.add(sh.mesh);
-  sh.mesh.position.set(XSTOP - sh.len/2, PALLET_TOP + 0.003 + S.pileLens.length*PITCH + TH/2, 0);
+  sh.mesh.rotation.z = 0;
+  sh.mesh.position.set(XSTOP - sh.len/2, PLT_TOP_L + 0.003 + S.pileLens.length*PITCH + TH/2, 0);
   S.pileLens.push(sh.len);
   S.sheets.splice(i,1);
   if(S.pileLens.length >= PILE_MAX && !S.palletAnim) S.palletAnim = {t:0};
@@ -723,7 +888,8 @@ function clearPile(){
 }
 
 /* ---------- 連続材（コイル→シャーまでのリボン形状を毎フレーム更新） ---------- */
-const NB = 14, NS = 24, NP = NB+NS;   // ベジエ区間＋直線区間のサンプル数
+const NB1 = 10, NB2 = 22, NS = 24, NP = NB1+NB2+NS;  // コイル→ループ入口／ループ区間／水平区間
+const LOOP_DEPTH_AMT = PL - LOOP_BOTTOM_Y;   // ループ最下点でのパスラインからの垂下量
 let stripMesh, stripPos;
 {
   const vcount = NP*2*4 + 8;          // 上面/下面/両側面 + 前後端面
@@ -751,14 +917,21 @@ let stripMesh, stripPos;
   scene.add(stripMesh);
 }
 function updateStrip(){
-  // 経路：コイル上端(接線・水平)→ベジエ→レベラー入側(水平)→先端xF
+  // 経路：コイル上端(接線・水平)→ベジエ→ループ入口で水平化→貯留ループ(縁ロールに接線)→レベラー→先端xF
   const y0 = COIL_CY + S.coilR;       // 板上面＝コイル外周上端（上から巻き出し）
-  const P0x=COIL_X, C1x=COIL_X+2.0, C2x=LEV_ENTRY-2.0, P3x=LEV_ENTRY;
+  const C1x = COIL_X+1.3, C2x = LOOP_ENTRY-1.0;
   const xs=[], ys=[];
-  for(let i=0;i<NB;i++){
-    const t=i/(NB-1), u=1-t;
-    xs.push(u*u*u*P0x + 3*u*u*t*C1x + 3*u*t*t*C2x + t*t*t*P3x);
-    ys.push(u*u*u*y0  + 3*u*u*t*y0  + 3*u*t*t*PL  + t*t*t*PL);
+  for(let i=0;i<NB1;i++){
+    const t=i/(NB1-1), u=1-t;
+    xs.push(u*u*u*COIL_X + 3*u*u*t*C1x + 3*u*t*t*C2x + t*t*t*LOOP_ENTRY);
+    ys.push(u*u*u*y0     + 3*u*u*t*y0  + 3*u*t*t*PL  + t*t*t*PL);
+  }
+  for(let i=1;i<=NB2;i++){
+    // ループ区間：縁のデフレクタロール(±LOOP_HALF_X)で接線水平、中央で最深の自由ループ
+    const x = LOOP_ENTRY + (LEV_ENTRY-LOOP_ENTRY)*i/NB2;
+    const dl = Math.min(1, Math.abs(x-LOOP_X)/LOOP_HALF_X);
+    xs.push(x);
+    ys.push(PL - LOOP_DEPTH_AMT*0.5*(1+Math.cos(Math.PI*dl)));
   }
   const xEnd = Math.max(LEV_ENTRY+0.05, S.xF);
   for(let i=0;i<NS;i++){
@@ -788,26 +961,46 @@ function updateStrip(){
 /* ---------- 動的要素の反映 ---------- */
 function easeInOut(k){ return k<0.5 ? 2*k*k : 1-2*(1-k)*(1-k); }
 function updateDynamics(dt){
-  // コイル
+  // コイル（上払い出し：頂部が+x方向へ動く回転＝負方向）
   coilMesh.scale.set(S.coilR, S.coilR, 1);
-  coilMesh.rotation.z = S.coilPh;
-  mandrel.rotation.z = S.coilPh;
+  coilMesh.rotation.z = -S.coilPh;
+  mandrel.rotation.z = -S.coilPh;
   updateSnubber(dt);
-  // ロール回転（ラインとの速度差を作らず、常に線速一定で転がり接触）
+  // ロール回転：周速=接している板の速度（入側系=ライン速度／出側系=OUT_K倍）
+  const vOut = S.v * OUT_K;
   for(const sp of spinners){
-    sp.mesh.rotation.z += sp.dir * (S.v/sp.r) * dt;
+    const vs = sp.kind==='conv' ? vOut : S.v;
+    sp.mesh.rotation.z += sp.dir * (vs/sp.r) * dt;
   }
-  // キャリッジ
+  // キャリッジ・下刃（アップカット：LB_LO→LB_HIへ上昇）・クランプ
   carGrp.position.x = S.xc;
   for(const w of carWheels) w.rotation.z -= (S.vc/0.14)*dt;
-  bladeGrp.position.y = BLADE_UP + (BLADE_DN-BLADE_UP)*S.blade;
-  clampGrp.position.x = -0.48;
+  bladeGrp.position.y = LB_LO + STROKE*S.blade;
   clampGrp.position.y = PL + 0.5 - 0.498*S.clamp;
-  // 切板
-  for(const sh of S.sheets)
-    sh.mesh.position.set(sh.x + sh.len/2, sh.y - TH/2, 0);
-  // パレット搬出
-  if(S.palletAnim) pileGroup.position.z = easeInOut(Math.min(1,S.palletAnim.t))*5.2;
+  // 切板（切断直後は上昇中の下刃が尾端を蹴り上げる＝アップカット特有の挙動）
+  const bladeTop = LB_LO + STROKE*S.blade;
+  for(const sh of S.sheets){
+    let lift = 0;
+    if(S.phase==='CUT' && !sh.drop && sh.x > S.xc-0.05 && sh.x < S.xc+0.2)
+      lift = Math.max(0, bladeTop - (PL-TH));
+    if(lift > 0){
+      sh.mesh.rotation.z = -Math.asin(Math.min(1, lift/sh.len));
+      sh.mesh.position.set(sh.x + sh.len/2, sh.y - TH/2 + lift/2, 0);
+    }else{
+      sh.mesh.rotation.z = 0;
+      sh.mesh.position.set(sh.x + sh.len/2, sh.y - TH/2, 0);
+    }
+  }
+  // スタッカー：ガイドロールアームの板幅追従＋選択傾倒退避
+  for(const a of armGroups){
+    const on = S.dropArms && a.x >= S.dropArms.x0 - 0.05;
+    a.grp.rotation.x = -a.side * 0.7 * (on ? S.railK : 0);
+    a.grp.position.z = a.side * (HW + 0.16);
+  }
+  for(const bm of guideBeams) bm.position.z = bm.userData.side * (HW + 0.16);
+  // リフト昇降・パレット搬出
+  liftGrp.position.y = S.liftOff;
+  if(S.palletAnim) palletGrp.position.z = easeInOut(Math.min(1,S.palletAnim.t))*5.2;
   updateStrip();
 }
 
@@ -880,7 +1073,7 @@ function drawOverlay(){
   if(!ui.chkLabels.checked) return;
   const labels=[
     {p:[COIL_X, COIL_CY+2.0, 0], t:'アンコイラー'},
-    {p:[-13.6, 3.2, 0], t:'アルミ板（ストリップ）', small:true},
+    {p:[LOOP_X, PL+0.9, 0], t:'ルーパー（貯留ループ）', small:true},
     {p:[-10, 3.55, 0], t:'レベラー（矯正機）'},
     {p:[-6, 3.0, 0], t:'測長ピンチロール'},
     {p:[S.xc, 4.35, 0], t:'フライングシャー（走間剪断機）'},
@@ -964,10 +1157,11 @@ ui.chkRotate.addEventListener('change',()=>{cam.auto=ui.chkRotate.checked;});
 ui.chkShadow.addEventListener('change',()=>{sun.castShadow=ui.chkShadow.checked;});
 
 let drag=null, pinch=null;
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointerdown',e=>{
   cv.setPointerCapture(e.pointerId);
   if(drag&&drag.id!==e.pointerId) pinch={pts:{},d0:0};
-  drag={id:e.pointerId,x:e.clientX,y:e.clientY};
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY,btn:e.button};
   cv.classList.add('dragging');
 });
 cv.addEventListener('pointermove',e=>{
@@ -983,9 +1177,20 @@ cv.addEventListener('pointermove',e=>{
     return;
   }
   if(!drag||e.pointerId!==drag.id) return;
-  cam.yaw-=(e.clientX-drag.x)*0.005;
-  cam.pitch+=(e.clientY-drag.y)*0.005;
-  cam.pitch=Math.min(1.5,Math.max(0.06,cam.pitch));
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(drag.btn===2){
+    // 右ドラッグ：視野を水平方向に平行移動（地面をつかんで動かす操作感）
+    const k = cam.dist*0.0011;
+    const cy=Math.cos(cam.yaw), sy=Math.sin(cam.yaw);
+    cam.tx += (-cy*dx - sy*dy)*k;
+    cam.tz += ( sy*dx - cy*dy)*k;
+    cam.tx = Math.min(25, Math.max(-25, cam.tx));
+    cam.tz = Math.min(9.5, Math.max(-9.5, cam.tz));
+  }else{
+    cam.yaw-=dx*0.005;
+    cam.pitch+=dy*0.005;
+    cam.pitch=Math.min(1.5,Math.max(0.06,cam.pitch));
+  }
   drag.x=e.clientX; drag.y=e.clientY;
   camAnim=null;
 });
