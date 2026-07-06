@@ -172,7 +172,7 @@
       <ul class="legend">
         <li><span class="dot" style="background:#96a4b4"></span><div><b>① アンコイラー</b><br><span>ピット設置。コイル上側からパスライン高さ付近で払い出し、スナバロールが緩み止めとして外周に追従</span></div></li>
         <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のロールで巻きぐせ・反りを矯正</span></div></li>
-        <li><span class="dot" style="background:#7a8fa6"></span><div><b>②' ルーパー</b><br><span>レベラーと測長ロールの間に貯留ループを設置。垂下量は板剛性相当の緩いループで、張力変動やシャー振動の上流波及を抑制。未使用時は折畳みローラーテーブルを展開して直通通板</span></div></li>
+        <li><span class="dot" style="background:#7a8fa6"></span><div><b>②' ルーパー</b><br><span>レベラーと測長ロールの間にピット設置の貯留ループを設置。垂下量は板厚に応じた自重たわみ計算値（薄板ほど深く垂れる）とし、ピットにより床と接触しない。張力変動やシャー振動の上流波及を抑制。未使用時は折畳みローラーテーブルを展開して直通通板</span></div></li>
         <li><span class="dot" style="background:#5b7186"></span><div><b>③ 測長ピンチロール</b><br><span>板に密着して送り長さを計測</span></div></li>
         <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同速で走行し、クランプで固定後、出側配置の下刃が上昇して固定上刃とすれ違うアップカット剪断</span></div></li>
         <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインの約1.5倍に増速して搬送し、切板間にギャップを形成（詰まり時はラインが自動一時停止）</span></div></li>
@@ -255,7 +255,10 @@ const PIT_HALF_X = 1.8, PIT_HALF_Z = 2.3;
 // 垂れない）、床上で完結する。未使用時は折畳みローラーテーブルを展開して直通で通板する。
 const LOOP_X = -12.0;
 const LOOP_HALF_X = 5.0;    // 縁デフレクタロールまでの半スパン（従来の約5倍に拡張）
-const LOOP_SAG_MIN = 0.05, LOOP_SAG_MAX = 1.3;  // 垂下量のクランプ（床・上流機器と干渉しない範囲）
+// 薄板時の深い垂れ下がりが床と干渉しないよう、ループ直下も浅くピットを掘る（アンコイラー同様）
+const LOOP_PIT_FLOOR = -0.6;
+const LOOP_PIT_HALF_X = LOOP_HALF_X - 0.4, LOOP_PIT_HALF_Z = 1.2;
+const LOOP_SAG_MIN = 0.05, LOOP_SAG_MAX = 1.5;  // 垂下量のクランプ（ピット床と干渉しない範囲）
 // 単純支持はりの自重たわみ式 δ=5ρgL⁴/(32E t²)（アルミ：ρ=2700kg/m³, E=69GPa）を用い、
 // 板厚が薄いほど深く・厚いほど浅く垂れる自然な挙動を再現する（幅は分子分母で相殺し寄与しない）。
 const LOOP_RHO = 2700, LOOP_G = 9.81, LOOP_E = 69e9;
@@ -616,6 +619,7 @@ function rollerTable(rxs, kind){
     floorShape.holes.push(p);
   };
   addHole(COIL_X, 0, PIT_HALF_X, PIT_HALF_Z);
+  addHole(LOOP_X, 0, LOOP_PIT_HALF_X, LOOP_PIT_HALF_Z);
   const gnd = new THREE.Mesh(new THREE.ShapeGeometry(floorShape), M.floor);
   gnd.rotation.x = -Math.PI/2; gnd.receiveShadow = true;
   scene.add(gnd);
@@ -628,11 +632,12 @@ function rollerTable(rxs, kind){
     p.rotation.x = -Math.PI/2; p.position.set(x,y,z); p.receiveShadow = true;
     scene.add(p);
   };
-  mkPlane(34, 6.2, 3.7, 0, 0.006, M.aisle);            // アンコイラーピットを避けて敷設
+  mkPlane(28, 6.2, 6.85, 0, 0.006, M.aisle);           // アンコイラー・ループ両ピットを避けて敷設
   mkPlane(7.6, 6.2, -0.25, 0, 0.010, M.zone);          // シャー安全域
   mkPlane(48, 0.16, -3.2, -3.18, 0.014, M.hazard);
   mkPlane(48, 0.16, -3.2,  3.18, 0.014, M.hazard);
   addPit(COIL_X, PIT_HALF_X, PIT_HALF_Z, PIT_FLOOR);   // アンコイラーピット
+  addPit(LOOP_X, LOOP_PIT_HALF_X, LOOP_PIT_HALF_Z, LOOP_PIT_FLOOR); // ループピット
 }
 
 /* ---------- ① アンコイラー ---------- */
