@@ -564,9 +564,6 @@ function addRollZ(parent,x,y,z,r,len,material,dir=0,kind='line',seg=24,axleExt=0
     grp.add(ax);
   }
   if(dir!==0){
-    const mk = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.03, len*0.9), M.mark);
-    mk.position.set(0, r*0.99, 0);
-    m.add(mk);
     spinners.push({mesh:grp, r, dir, kind});
   }
   return grp;
