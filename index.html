@@ -21,6 +21,8 @@
     display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; background:var(--panel);
   }
   header h1{font-size:17px; font-weight:700; letter-spacing:.02em;}
+  header h1 .ver{font-size:11px; font-weight:600; color:var(--acc); background:rgba(226,161,58,0.12);
+    border:1px solid rgba(226,161,58,0.4); border-radius:9px; padding:1px 8px; vertical-align:2px; margin-left:4px;}
   header .sub{font-size:12px; color:var(--tx2);}
   #app{flex:1; display:flex; min-height:0;}
   #view{flex:1; position:relative; min-width:0;}
@@ -95,7 +97,7 @@
 </head>
 <body>
 <header>
-  <h1>フライングシャーライン 3Dシミュレータ</h1>
+  <h1>フライングシャーライン 3Dシミュレータ <span class="ver">v1.0.0</span></h1>
   <span class="sub">アルミニウム板 連続切断工程（走間剪断）の動作モデル</span>
 </header>
 
@@ -171,7 +173,7 @@
       <h2>ライン構成（材料の流れ順）</h2>
       <ul class="legend">
         <li><span class="dot" style="background:#96a4b4"></span><div><b>① アンコイラー</b><br><span>ピット設置。コイル上側からパスライン高さ付近で払い出し、スナバロールが緩み止めとして外周に追従</span></div></li>
-        <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のロールで巻きぐせ・反りを矯正</span></div></li>
+        <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のワークロールで巻きぐせ・反りを矯正。ワークロールは中間ロール・バックアップロールで支持される6段構成</span></div></li>
         <li><span class="dot" style="background:#7a8fa6"></span><div><b>②' ルーパー</b><br><span>レベラーと測長ロールの間にピット設置の貯留ループを設置。垂下量は板厚に応じた自重たわみ計算値（薄板ほど深く垂れる）とし、ピットにより床と接触しない。張力変動やシャー振動の上流波及を抑制。未使用時は折畳みローラーテーブルを展開して直通通板</span></div></li>
         <li><span class="dot" style="background:#5b7186"></span><div><b>③ 測長ピンチロール</b><br><span>板に密着して送り長さを計測</span></div></li>
         <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同速で走行し、クランプで固定後、出側配置の下刃が上昇して固定上刃とすれ違うアップカット剪断</span></div></li>
@@ -309,8 +311,10 @@ function step(dt){
   const lastSh = S.sheets.length ? S.sheets[S.sheets.length-1] : null;
   if(lastSh){
     const gap = lastSh.x - S.xF;
+    // 切断直後は先行切板が増速して自然に離れていく（gapが小さいだけでは詰まりではない）。
+    // 先行切板がライン速度より遅い＝実際に前が捌けていない場合のみ停止する
     if(S.hold){ if(gap > 0.30) S.hold = false; }
-    else if(gap < 0.06) S.hold = true;
+    else if(gap < 0.08 && lastSh.spd < v - 1e-6) S.hold = true;
   }else S.hold = false;
   const vL = S.hold ? 0 : v;   // 上流系（コイル～シャー）の実効速度
 
@@ -707,17 +711,28 @@ function updateSnubber(dt){
 {
   const g = new THREE.Group(); scene.add(g);
   g.position.x = -9.2;
-  addBox(g, -10, 0.55, 0, 3.4, 1.1, 3.0, M.steelD);
+  addBox(g, -10, 0.4, 0, 3.4, 0.8, 3.0, M.steelD);
   addBox(g, -10, 1.85, 1.46, 3.4, 1.6, 0.16, M.levBlu);   // 奥プレート
   addBox(g, -10, 1.25, -1.46, 3.4, 0.4, 0.16, M.levBlu);  // 手前プレート(カットアウェイ・デフォルト視点側)
   addBox(g, -10, 2.78, 0, 3.4, 0.3, 3.08, M.levBlu);
   for(const jx of [-11.1,-10.1,-9.1])                     // 圧下ジャッキ
     addBox(g, jx, 3.1, 0, 0.24, 0.35, 0.24, M.steelD);
-  // 下ロール4本（板下面に接触）／上ロール3本（板上面に接触）：千鳥配置。軸は側板の軸受に通す
-  for(const rx of [-11.1,-10.35,-9.6,-8.85])
-    addRollZ(g, rx, PL-TH-0.22, 0, 0.22, 2.6, M.roller, -1, 'line', 24, 0.25);
-  for(const rx of [-10.72,-9.97,-9.22])
-    addRollZ(g, rx, PL+0.22, 0, 0.22, 2.6, M.roller, +1, 'line', 24, 0.25);
+  // 6段構成：ワークロール（板に接触）を中間ロールで支え、さらにバックアップロールで受ける。
+  // 中間・バックアップはワークロール列の谷間に接触配置（千鳥）で、接触相手と逆回転する
+  const WRY_LO = PL-TH-0.22, WRY_HI = PL+0.22;   // ワークロール中心高さ（下/上）
+  const NEST = 0.139;                             // 谷間接触の中心間高低差 √((r1+r2)²-Δx²)
+  for(const rx of [-11.1,-10.35,-9.6,-8.85])      // 下ワークロール4本
+    addRollZ(g, rx, WRY_LO, 0, 0.22, 2.6, M.roller, -1, 'line', 24, 0.25);
+  for(const rx of [-10.72,-9.97,-9.22])           // 上ワークロール3本
+    addRollZ(g, rx, WRY_HI, 0, 0.22, 2.6, M.roller, +1, 'line', 24, 0.25);
+  for(const rx of [-10.725,-9.975,-9.225])        // 下中間ロール3本
+    addRollZ(g, rx, WRY_LO-NEST, 0, 0.18, 2.5, M.roller, +1, 'line', 18, 0.15);
+  for(const rx of [-10.35,-9.6])                  // 下バックアップロール2本
+    addRollZ(g, rx, WRY_LO-NEST*2, 0, 0.22, 2.4, M.steelL, -1, 'line', 18, 0.1);
+  for(const rx of [-11.095,-10.345,-9.595,-8.845])// 上中間ロール4本
+    addRollZ(g, rx, WRY_HI+NEST, 0, 0.18, 2.5, M.roller, -1, 'line', 18, 0.15);
+  for(const rx of [-10.72,-9.97,-9.22])           // 上バックアップロール3本
+    addRollZ(g, rx, WRY_HI+NEST*2, 0, 0.22, 2.4, M.steelL, +1, 'line', 18, 0.1);
   // 入側ガイド（板を挟まず上下に逃げを持つ）
   addBox(g, -11.55, 1.74, 0, 0.3, 0.05, 2.6, M.steel);
   addBox(g, -11.55, 1.42, 0, 0.34, 0.08, 2.6, M.steel);
@@ -794,12 +809,12 @@ let carGrp, bladeGrp, clampGrp, carWheels=[];
       const w = addRollZ(carGrp, wx, 0.56, zx, 0.14, 0.2, M.dark, 0, 'line', 14);
       carWheels.push(w);                                    // レール上面0.42に接地
     }
-    addBox(carGrp, 0, 2.07, zx, 0.85, 2.5, 0.46, M.yellow); // 支柱
+    addBox(carGrp, 0, 1.93, zx, 0.7, 2.22, 0.42, M.yellow); // 支柱
   }
-  addBox(carGrp, 0, 3.32, 0, 0.95, 0.55, 3.95, M.yellow);   // クロスヘッド
+  addBox(carGrp, 0, 2.84, 0, 0.8, 0.4, 3.65, M.yellow);     // クロスヘッド
 
   // 上刃（固定）：クロスヘッドから吊ったホルダの下端。刃先下端=UB_BOT で動かない
-  addBox(carGrp, -0.07, 2.64, 0, 0.5, 0.81, 3.2, M.orange);            // 上刃ホルダ
+  addBox(carGrp, -0.07, 2.44, 0, 0.45, 0.4, 3.1, M.orange);            // 上刃ホルダ
   addBox(carGrp, -0.07, UB_BOT+0.3, 0, 0.12, 0.6, 2.9, M.blade);       // 固定上刃（下端=UB_BOT）
 
   // 入側アンビル（クランプ受け・板支持。上面=板下面-0.005。下刃スロットの上流壁を兼ねる）
@@ -828,14 +843,14 @@ let carGrp, bladeGrp, clampGrp, carWheels=[];
   clampGrp.position.x = -0.45;
   addBox(clampGrp, 0, 0.06, 0, 0.3, 0.12, 2.7, M.steel);
   for(const rz of [-0.9, 0.9]){
-    const pg = new THREE.CylinderGeometry(0.05, 0.05, 1.7, 8);
+    const pg = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8);
     const pin = new THREE.Mesh(pg, M.steelL);
-    pin.position.set(0, 0.9, rz);
+    pin.position.set(0, 0.65, rz);
     clampGrp.add(pin);
   }
   // クランプシリンダ本体（クロスヘッド上、ロッドと同一z）
-  addBox(carGrp, -0.45, 3.7, -0.9, 0.3, 0.75, 0.3, M.steelD);
-  addBox(carGrp, -0.45, 3.7,  0.9, 0.3, 0.75, 0.3, M.steelD);
+  addBox(carGrp, -0.45, 3.2, -0.9, 0.28, 0.5, 0.28, M.steelD);
+  addBox(carGrp, -0.45, 3.2,  0.9, 0.28, 0.5, 0.28, M.steelD);
 }
 
 /* ---------- ⑤ ランアウトコンベア ---------- */
@@ -1041,7 +1056,7 @@ function updateDynamics(dt){
   carGrp.position.x = S.xc;
   for(const w of carWheels) w.rotation.z -= (S.vc/0.14)*dt;
   bladeGrp.position.y = LB_LO + STROKE*S.blade;
-  clampGrp.position.y = PL + 0.5 - 0.498*S.clamp;
+  clampGrp.position.y = PL + 0.35 - 0.348*S.clamp;
   // 切板（切断直後は上昇中の下刃が尾端を蹴り上げる＝アップカット特有の挙動）
   const bladeTop = LB_LO + STROKE*S.blade;
   for(const sh of S.sheets){
@@ -1140,9 +1155,9 @@ function drawOverlay(){
   const labels=[
     {p:[COIL_X, COIL_CY+2.0, 0], t:'アンコイラー'},
     {p:[LOOP_X, PL+0.9, 0], t:'ルーパー（貯留ループ）', small:true},
-    {p:[-11.2, 3.55, 0], t:'レベラー（矯正機）'},
+    {p:[-19.2, 3.4, 0], t:'レベラー（矯正機）'},
     {p:[-6, 3.0, 0], t:'測長ピンチロール'},
-    {p:[S.xc, 4.35, 0], t:'フライングシャー（走間剪断機）'},
+    {p:[S.xc, 3.7, 0], t:'フライングシャー（走間剪断機）'},
     {p:[9.5, 2.5, 0], t:'ランアウトコンベア'},
     {p:[STK_CX+0.3, 3.1, 0], t:'スタッカー（積載）'}
   ];
