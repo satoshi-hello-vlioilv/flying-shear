@@ -9,6 +9,7 @@
   :root{
     --bg:#12161c; --panel:#1a2029; --panel2:#20293a; --line:#2e3a4a;
     --tx:#e8eef5; --tx2:#9db0c4; --acc:#e2a13a; --acc2:#4da3ff; --ok:#5ecb8a;
+    --hud:rgba(20,26,34,.82); --peek:132px;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{height:100%;}
@@ -17,52 +18,6 @@
     font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",Meiryo,sans-serif;
     display:flex; flex-direction:column; overflow:hidden;
   }
-  header{
-    padding:10px 16px; border-bottom:1px solid var(--line);
-    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; background:var(--panel);
-  }
-  header h1{font-size:17px; font-weight:700; letter-spacing:.02em;}
-  header h1 .ver{font-size:11px; font-weight:600; color:var(--acc); background:rgba(226,161,58,0.12);
-    border:1px solid rgba(226,161,58,0.4); border-radius:9px; padding:1px 8px; vertical-align:2px; margin-left:4px;}
-  header .sub{font-size:12px; color:var(--tx2);}
-  #app{flex:1; display:flex; min-height:0;}
-  #view{flex:1; position:relative; min-width:0;}
-  canvas#c{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none;}
-  canvas#c.dragging{cursor:grabbing;}
-  canvas#ov{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
-
-  /* ---- HUD ---- */
-  #phasebar{
-    position:absolute; top:10px; left:50%; transform:translateX(-50%);
-    display:flex; gap:6px; flex-wrap:wrap; justify-content:center; pointer-events:none; max-width:92%;
-  }
-  .chip{
-    font-size:12px; padding:5px 10px; border-radius:999px; white-space:nowrap;
-    background:rgba(20,26,34,.78); border:1px solid var(--line); color:var(--tx2);
-    transition:all .15s;
-  }
-  .chip.on{background:var(--acc); border-color:var(--acc); color:#20180a; font-weight:700;}
-  #stats{
-    position:absolute; left:10px; top:10px; font-size:12px; line-height:1.75;
-    background:rgba(20,26,34,.8); border:1px solid var(--line); border-radius:10px;
-    padding:10px 12px; min-width:196px; pointer-events:none;
-  }
-  #stats b{font-weight:400; color:var(--tx2);}
-  #stats .v{color:var(--tx); font-variant-numeric:tabular-nums; float:right; margin-left:14px;}
-  #measbarWrap{height:6px; background:#2a3442; border-radius:3px; overflow:hidden; margin-top:2px;}
-  #measbar{height:100%; width:0%; background:var(--acc2); border-radius:3px;}
-  #hint{
-    position:absolute; left:10px; bottom:10px; font-size:11px; color:var(--tx2);
-    background:rgba(20,26,34,.7); border:1px solid var(--line); border-radius:8px; padding:5px 9px; pointer-events:none;
-  }
-
-  /* ---- side panel ---- */
-  #panel{
-    width:296px; flex:none; background:var(--panel); border-left:1px solid var(--line);
-    overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:14px;
-  }
-  .sec h2{font-size:12px; color:var(--tx2); font-weight:600; letter-spacing:.08em; margin-bottom:8px;}
-  .row{display:flex; gap:8px; align-items:center;}
   button{
     font:inherit; font-size:13px; color:var(--tx); background:var(--panel2);
     border:1px solid var(--line); border-radius:8px; padding:7px 10px; cursor:pointer;
@@ -71,35 +26,162 @@
   button.primary{background:var(--acc); border-color:var(--acc); color:#20180a; font-weight:700;}
   button.mini{padding:5px 9px; font-size:12px;}
   button.sel{background:var(--acc2); border-color:var(--acc2); color:#0b1826; font-weight:700;}
+  .row{display:flex; gap:8px; align-items:center;}
   .grow{flex:1;}
-  label.slider{display:block; font-size:12px; color:var(--tx2); margin-top:8px;}
+  label.slider{display:block; font-size:12px; color:var(--tx2);}
   label.slider .val{float:right; color:var(--tx); font-variant-numeric:tabular-nums;}
   input[type=range]{width:100%; accent-color:var(--acc); margin-top:4px;}
-  label.chk{display:flex; gap:8px; align-items:center; font-size:13px; margin-top:6px; cursor:pointer;}
+  label.chk{display:flex; gap:8px; align-items:center; font-size:13px; cursor:pointer; white-space:nowrap;}
   input[type=checkbox]{accent-color:var(--acc); width:15px; height:15px;}
-  .legend{list-style:none; font-size:12px; display:flex; flex-direction:column; gap:7px;}
-  .legend li{display:flex; gap:8px; align-items:flex-start; line-height:1.45;}
-  .dot{width:10px; height:10px; border-radius:3px; flex:none; margin-top:3px;}
-  .legend b{color:var(--tx); font-weight:600;}
-  .legend span{color:var(--tx2);}
-  details{border:1px solid var(--line); border-radius:10px; background:var(--panel2);}
-  details summary{cursor:pointer; padding:9px 12px; font-size:13px; font-weight:600;}
-  details .body{padding:0 12px 12px; font-size:12px; line-height:1.8; color:var(--tx2);}
-  details .body b{color:var(--tx);}
-  details .body ol{padding-left:18px; margin:6px 0;}
+
+  /* ---- ヘッダー（1行・最小） ---- */
+  header{
+    padding:6px 14px; border-bottom:1px solid var(--line); background:var(--panel);
+    display:flex; align-items:center; gap:12px;
+  }
+  header h1{font-size:15px; font-weight:700; letter-spacing:.02em; white-space:nowrap;}
+  header h1 .ver{font-size:11px; font-weight:600; color:var(--acc); background:rgba(226,161,58,0.12);
+    border:1px solid rgba(226,161,58,0.4); border-radius:9px; padding:1px 8px; vertical-align:2px; margin-left:4px;}
+  header .sub{font-size:12px; color:var(--tx2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  header h1{min-width:0; overflow:hidden; text-overflow:ellipsis;}
+  header .hr{margin-left:auto; flex:none;}
+  .ibtn{display:inline-flex; gap:5px; align-items:center; font-size:12px; padding:6px 10px;}
+  .ibtn.act,.mc.act{border-color:var(--acc); color:var(--acc);}
+
+  #app{flex:1; display:flex; flex-direction:column; min-height:0; position:relative;}
+  #view{flex:1; position:relative; min-width:0; min-height:0;}
+  canvas#c{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none;}
+  canvas#c.dragging{cursor:grabbing;}
+  canvas#ov{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
+
+  /* ---- HUD：工程ステッパー（各工程の進捗を内包） ---- */
+  #phasebar{
+    position:absolute; top:10px; left:50%; transform:translateX(-50%);
+    display:flex; gap:3px; padding:5px; pointer-events:none;
+    background:var(--hud); border:1px solid var(--line); border-radius:10px;
+  }
+  .sg{width:168px; font-size:11.5px; color:var(--tx2); padding:3px 8px 5px; border-radius:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sg small{font-size:10.5px; margin-left:3px; font-variant-numeric:tabular-nums;}
+  .sg i{display:block; height:4px; background:#2a3442; border-radius:2px; margin-top:4px; overflow:hidden;}
+  .sg em{display:block; height:100%; width:0; background:var(--acc2);}
+  .sg.on{background:rgba(226,161,58,.16); color:var(--tx);}
+  .sg.on>span{font-weight:700; color:var(--acc);}
+  .sg.done em{width:100%!important; background:#4a5a70;}
+
+  /* ---- HUD：生産サマリー（詳細な速度・同期はキャリッジ上の3Dバッジで表示） ---- */
+  #stats{
+    position:absolute; left:10px; top:10px; font-size:12px; line-height:1.6; pointer-events:none;
+    background:var(--hud); border:1px solid var(--line); border-radius:10px; padding:8px 12px;
+  }
+  #stats .kv{display:flex; justify-content:space-between; gap:14px;}
+  #stats .kv span{color:var(--tx2);}
+  #stats .kv b{font-weight:500; font-variant-numeric:tabular-nums;}
+  #stats .kv b.warn{color:#ff8a65;}
+  .prod{display:flex; gap:12px; font-size:11px; color:var(--tx2); margin-top:4px; padding-top:4px; border-top:1px solid var(--line);}
+  .prod b{color:var(--tx); font-weight:600; margin-left:3px; font-variant-numeric:tabular-nums;}
+
+  /* ---- 視点コントロール（地図アプリ型） ---- */
+  #mapctl{
+    position:absolute; right:10px; top:10px; display:flex; flex-direction:column; gap:4px;
+    background:var(--hud); border:1px solid var(--line); border-radius:10px; padding:4px;
+  }
+  .mc{display:flex; flex-direction:column; align-items:center; width:52px; padding:5px 0; font-size:15px;
+    background:none; border-color:transparent; line-height:1.15;}
+  .mc small{font-size:10px; color:var(--tx2);}
+  .mc.sel{background:var(--acc2); color:#0b1826;} .mc.sel small{color:#0b1826;}
+
+  /* ---- 機器ナビ（ライン構成＝クリックでカメラ移動） ---- */
+  #eqbar{
+    position:absolute; left:50%; transform:translateX(-50%); bottom:10px; display:flex; gap:2px;
+    background:var(--hud); border:1px solid var(--line); border-radius:999px; padding:4px; max-width:calc(100% - 20px); overflow-x:auto;
+  }
+  .eq{font-size:11.5px; padding:4px 10px 4px 5px; border-radius:999px; background:none; border-color:transparent;
+    display:flex; gap:5px; align-items:center; white-space:nowrap;}
+  .eq i{width:16px; height:16px; border-radius:50%; font-style:normal; font-size:10px; font-weight:700;
+    display:grid; place-items:center; color:#fff;}
+  .eq.on{border-color:var(--acc);}
+
+  #hint{
+    position:absolute; left:10px; bottom:52px; font-size:11px; color:var(--tx2); pointer-events:none;
+    background:rgba(20,26,34,.7); border:1px solid var(--line); border-radius:8px; padding:5px 9px; transition:opacity .8s;
+  }
+  #hint.fade{opacity:0;}
+
+  /* ---- ポップオーバー（サブ情報） ---- */
+  .pop{display:none; position:absolute; z-index:20; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:12px; box-shadow:0 10px 30px #0009; width:260px; max-height:calc(100% - 20px); overflow:auto;}
+  .pop.show{display:block;}
+  .pclose{position:absolute; right:6px; top:6px; padding:0 8px; font-size:16px; line-height:24px; background:none; border-color:transparent; color:var(--tx2);}
+  .pop h3{font-size:12px; color:var(--tx2); font-weight:600; letter-spacing:.06em; margin:0 0 8px;}
+  .pop h3+*{margin-bottom:12px;}
+  .pop label.chk{margin-top:6px;}
+  #popDisp{right:72px; top:10px; width:180px;}
+  #popInfo{right:10px; top:10px; width:380px;}
+  .body2{font-size:12px; line-height:1.8; color:var(--tx2);}
+  .body2 b{color:var(--tx);}
+  .body2 ol{padding-left:18px; margin:6px 0;}
   .note{font-size:11px; color:#7a8ca0;}
+  .eqlist{list-style:none; display:flex; flex-direction:column; gap:2px; font-size:12px;}
+  .eqlist summary{display:flex; gap:8px; align-items:center; padding:4px 2px; cursor:pointer; list-style:none;}
+  .eqlist summary::-webkit-details-marker{display:none;}
+  .eqlist summary::after{content:"▸"; margin-left:auto; color:var(--tx2);}
+  .eqlist details[open] summary::after{content:"▾";}
+  .eqlist i{width:16px; height:16px; border-radius:50%; font-style:normal; font-size:10px; font-weight:700;
+    display:grid; place-items:center; color:#fff; flex:none;}
+  .eqlist p{color:var(--tx2); padding:0 0 6px 24px; line-height:1.6;}
+  kbd{font:inherit; font-size:11px; border:1px solid var(--line); border-radius:4px; padding:0 4px; background:var(--panel2); color:var(--tx);}
+
+  /* ---- 運転ドック（主要操作を1行に集約） ---- */
+  #dock{display:flex; gap:14px; align-items:center; padding:8px 14px; background:var(--panel); border-top:1px solid var(--line);}
+  .dg{display:flex; gap:6px; align-items:center;}
+  .dg.params{flex:1; display:grid; grid-template-columns:repeat(4,minmax(110px,1fr)); gap:14px;}
+  .sep{width:1px; align-self:stretch; background:var(--line);}
+  .lab{font-size:11px; color:var(--tx2); white-space:nowrap;}
+  .grab{display:none;}
+  #dock button{white-space:nowrap;}
+
+  @media (max-width: 1180px){
+    /* タブレット幅：ステッパーを右寄せして統計カードとの重なりを避け、ドックは2段まで折り返す */
+    #phasebar{left:auto; right:76px; transform:none;}
+    .sg{width:118px;} .sg small{display:none;}
+    #dock{flex-wrap:wrap; row-gap:8px;}
+    .dg.params{flex:1 1 520px;}
+  }
 
   @media (max-width: 860px){
-    #app{flex-direction:column;}
-    #panel{width:100%; max-height:42%; border-left:none; border-top:1px solid var(--line);}
-    #stats{font-size:11px; min-width:170px;}
+    header .sub{display:none;}
+    header h1{font-size:13px;} header h1 .ver{display:none;}
+    .ibtn .t{display:none;}
+    #hint{display:none;}
+    /* 運転ドック → ボトムシート（ハンドルで展開） */
+    #dock{
+      position:absolute; left:0; right:0; bottom:0; max-height:80%; z-index:15; overflow:auto;
+      flex-direction:column; align-items:stretch; gap:12px; padding:0 14px 16px;
+      border-radius:14px 14px 0 0; transform:translateY(calc(100% - var(--peek))); transition:transform .25s;
+    }
+    #dock.open{transform:none;}
+    .grab{display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0 0; border:none; background:none;
+      font-size:11px; color:var(--tx2); width:100%;}
+    .grab::before{content:""; width:44px; height:5px; border-radius:3px; background:#56677e;}
+    .dg.params{flex:none; grid-template-columns:1fr 1fr; gap:12px;}
+    .sep{display:none;}
+    #view{margin-bottom:var(--peek);}
+    #stats{left:8px; top:8px; font-size:11px; padding:6px 9px;}
+    #mapctl{top:8px; right:8px;}
+    .mc{width:40px; padding:4px 0;} .mc small{display:none;}
+    #phasebar{left:8px; right:8px; transform:none; top:auto; bottom:52px;}
+    .sg{flex:1; width:auto; font-size:10px; padding:3px 4px; overflow:hidden; text-overflow:ellipsis;}
+    .sg small{display:none;}
+    #eqbar{left:8px; right:8px; transform:none; bottom:8px; border-radius:10px;}
+    .pop{position:fixed!important; left:8px!important; right:8px!important; width:auto!important; top:50px!important; max-height:70vh;}
   }
 </style>
 </head>
 <body>
 <header>
-  <h1>フライングシャーライン 3Dシミュレータ <span class="ver">v1.0.0</span></h1>
+  <h1>フライングシャーライン 3Dシミュレータ <span class="ver">v1.1.0</span></h1>
   <span class="sub">アルミニウム板 連続切断工程（走間剪断）の動作モデル</span>
+  <div class="hr"><button class="ibtn" data-pop="popInfo" title="ライン構成・解説・操作方法">ⓘ<span class="t"> 構成・解説</span></button></div>
 </header>
 
 <div id="app">
@@ -108,98 +190,80 @@
     <canvas id="ov"></canvas>
 
     <div id="phasebar">
-      <span class="chip" id="ph0">① 材料送り（測長）</span>
-      <span class="chip" id="ph1">② 同期加速</span>
-      <span class="chip" id="ph2">③ クランプ・走間切断</span>
-      <span class="chip" id="ph3">④ 復帰</span>
+      <div class="sg" id="ph0"><span>① 材料送り<small id="stMeas"></small></span><i><em id="measbar"></em></i></div>
+      <div class="sg" id="ph1"><span>② 同期加速</span><i><em id="pb1"></em></i></div>
+      <div class="sg" id="ph2"><span>③ クランプ・切断</span><i><em id="pb2"></em></i></div>
+      <div class="sg" id="ph3"><span>④ 復帰</span><i><em id="pb3"></em></i></div>
     </div>
 
     <div id="stats">
-      <div><b>ライン速度</b><span class="v" id="stLine">–</span></div>
-      <div><b>キャリッジ速度</b><span class="v" id="stCar">–</span></div>
-      <div><b>速度同期率</b><span class="v" id="stSync">–</span></div>
-      <div><b>測長 / 設定長</b><span class="v" id="stMeas">–</span></div>
-      <div id="measbarWrap"><div id="measbar"></div></div>
-      <div><b>切断枚数</b><span class="v" id="stCount">0 枚</span></div>
-      <div><b>直前の切断長</b><span class="v" id="stLast">–</span></div>
-      <div><b>パレット搬出</b><span class="v" id="stPallet">0 回</span></div>
+      <div class="kv"><span>ライン速度</span><b id="stLine">–</b></div>
+      <div class="prod"><span>切断<b id="stCount">0</b></span><span>直前<b id="stLast">–</b></span><span>搬出<b id="stPallet">0</b></span></div>
     </div>
 
-    <div id="hint">ドラッグ：回転 ／ 右ドラッグ：平行移動 ／ ホイール・ピンチ：ズーム ／ ダブルクリック：全体表示</div>
+    <div id="mapctl">
+      <button class="mc vw sel" data-view="all" title="全体">⤢<small>全体</small></button>
+      <button class="mc vw" data-view="shear" title="シャー部">✂<small>シャー</small></button>
+      <button class="mc vw" data-view="out" title="搬出・積載">▤<small>積載</small></button>
+      <button class="mc vw" data-view="top" title="上面">⊤<small>上面</small></button>
+      <button class="mc" data-pop="popDisp" title="表示設定">⚙<small>表示</small></button>
+    </div>
+    <div class="pop" id="popDisp">
+      <button class="pclose" aria-label="閉じる">×</button>
+      <h3>表示</h3>
+      <div>
+        <label class="chk"><input type="checkbox" id="chkFollow">キャリッジ追従</label>
+        <label class="chk"><input type="checkbox" id="chkLabels" checked>機器ラベル</label>
+        <label class="chk"><input type="checkbox" id="chkShadow" checked>影</label>
+        <label class="chk"><input type="checkbox" id="chkRotate">カメラ自動回転</label>
+      </div>
+    </div>
+
+    <nav id="eqbar"></nav>
+    <div id="hint">ドラッグ：回転 ／ 右ドラッグ：平行移動 ／ ホイール・ピンチ：ズーム ／ ダブルクリック：全体表示 ／ <kbd>Space</kbd>：一時停止</div>
+
+    <div class="pop" id="popInfo">
+      <button class="pclose" aria-label="閉じる">×</button>
+      <h3>ライン構成（材料の流れ順）</h3>
+      <ul class="eqlist" id="eqlist"></ul>
+      <h3>解説：フライングシャーとは</h3>
+      <div class="body2">
+        <p><b>フライングシャー（走間剪断機）</b>は、連続して流れてくる板を<b>ラインを止めずに</b>定尺切断する装置です。切断の瞬間、刃を載せたキャリッジが板と同じ速度で走行することで、板に対する刃の相対速度がゼロになり、直角できれいな切り口が得られます。</p>
+        <ol>
+          <li>測長ロールで送り長さを計測</li>
+          <li>目標長さの直前でキャリッジが加速し、板速度に同期</li>
+          <li>クランプが板を固定し、同期を保ったまま下刃がライン速度と同調した機械式駆動で上昇（アップカット）→ 固定上刃とのすれ違いで剪断</li>
+          <li>刃・クランプが開放後、キャリッジは減速・後退して原位置へ復帰</li>
+        </ol>
+        <p>切断された板はランアウトコンベアで約1.5倍に増速されて前の板から引き離され、スタッカーのエッジガイドロール上をストッパまで搬送された後、上部ヒンジを軸としたガイドロールの振り出し退避により、一定高さのパイル上面へ落下・積載されます。出側が詰まった場合はラインが自動で一時停止し、追突を防ぎます。</p>
+      </div>
+      <h3>操作方法</h3>
+      <div class="body2">ドラッグ：回転 ／ 右ドラッグ：平行移動 ／ ホイール・ピンチ：ズーム ／ ダブルクリック：全体表示 ／ <kbd>Space</kbd>：一時停止・再開。3D上の機器ラベルや下部の機器ボタンをクリックすると、その機器へカメラが移動します。</div>
+      <p class="note">※板厚・寸法・速度は、動作を見やすくするため誇張しています（1目盛=1m相当）。<br>3D描画: Three.js r149（MIT License, 本ファイルに同梱）</p>
+    </div>
   </div>
 
-  <aside id="panel">
-    <div class="sec">
-      <h2>運転操作</h2>
-      <div class="row">
-        <button id="btnRun" class="primary grow">⏸ 一時停止</button>
-        <button id="btnReset">↺ リセット</button>
-      </div>
+  <footer id="dock">
+    <button class="grab" id="grab" aria-label="運転条件を開閉">運転条件</button>
+    <div class="dg"><button id="btnRun" class="primary">⏸ 一時停止</button><button id="btnReset">↺ リセット</button></div>
+    <div class="sep"></div>
+    <div class="dg params">
       <label class="slider">ライン速度 <span class="val" id="valSpeed">20 m/min</span>
-        <input type="range" id="rngSpeed" min="0" max="40" step="1" value="20">
-      </label>
+        <input type="range" id="rngSpeed" min="0" max="40" step="1" value="20"></label>
       <label class="slider">切断長さ <span class="val" id="valLen">3000 mm</span>
-        <input type="range" id="rngLen" min="300" max="8000" step="50" value="3000">
-      </label>
+        <input type="range" id="rngLen" min="300" max="8000" step="50" value="3000"></label>
       <label class="slider">板幅 <span class="val" id="valWidth">1200 mm</span>
-        <input type="range" id="rngWidth" min="300" max="1700" step="10" value="1200">
-      </label>
+        <input type="range" id="rngWidth" min="300" max="1700" step="10" value="1200"></label>
       <label class="slider">板厚 <span class="val" id="valThick">1.6 mm</span>
-        <input type="range" id="rngThick" min="0.3" max="6.0" step="0.1" value="1.6">
-      </label>
-      <label class="slider">アニメーション速度</label>
-      <div class="row" style="margin-top:4px">
-        <button class="mini grow ts" data-ts="0.25">0.25×</button>
-        <button class="mini grow ts" data-ts="0.5">0.5×</button>
-        <button class="mini grow ts sel" data-ts="1">1×</button>
-      </div>
-      <label class="chk"><input type="checkbox" id="chkLoop" checked>ルーパー（貯留ループ）を使用</label>
+        <input type="range" id="rngThick" min="0.3" max="6.0" step="0.1" value="1.6"></label>
     </div>
-
-    <div class="sec">
-      <h2>視点</h2>
-      <div class="row" style="flex-wrap:wrap">
-        <button class="mini vw sel" data-view="all">全体</button>
-        <button class="mini vw" data-view="shear">シャー部</button>
-        <button class="mini vw" data-view="out">搬出・積載</button>
-        <button class="mini vw" data-view="top">上面</button>
-      </div>
-      <label class="chk"><input type="checkbox" id="chkFollow">キャリッジ追従視点</label>
-      <label class="chk"><input type="checkbox" id="chkLabels" checked>機器ラベルを表示</label>
-      <label class="chk"><input type="checkbox" id="chkShadow" checked>影を表示</label>
-      <label class="chk"><input type="checkbox" id="chkRotate">カメラ自動回転</label>
+    <div class="sep"></div>
+    <div class="dg">
+      <span class="lab">再生</span>
+      <button class="mini ts" data-ts="0.25">0.25×</button><button class="mini ts" data-ts="0.5">0.5×</button><button class="mini ts sel" data-ts="1">1×</button>
+      <label class="chk" style="margin-left:6px"><input type="checkbox" id="chkLoop" checked>ルーパー使用</label>
     </div>
-
-    <div class="sec">
-      <h2>ライン構成（材料の流れ順）</h2>
-      <ul class="legend">
-        <li><span class="dot" style="background:#96a4b4"></span><div><b>① アンコイラー</b><br><span>ピット設置。コイル上側からパスライン高さ付近で払い出し、スナバロールが緩み止めとして外周に追従</span></div></li>
-        <li><span class="dot" style="background:#4a6ea0"></span><div><b>② レベラー（矯正機）</b><br><span>千鳥配置のワークロールで巻きぐせ・反りを矯正。ワークロールは中間ロール・バックアップロールで支持される6段構成</span></div></li>
-        <li><span class="dot" style="background:#7a8fa6"></span><div><b>②' ルーパー</b><br><span>レベラーと測長ロールの間にピット設置の貯留ループを設置。垂下量は板厚に応じた自重たわみ計算値（薄板ほど深く垂れる）とし、ピットにより床と接触しない。張力変動やシャー振動の上流波及を抑制。未使用時は折畳みローラーテーブルを展開して直通通板</span></div></li>
-        <li><span class="dot" style="background:#5b7186"></span><div><b>③ 測長ピンチロール</b><br><span>板に密着して送り長さを計測</span></div></li>
-        <li><span class="dot" style="background:#e2a13a"></span><div><b>④ フライングシャー</b><br><span>板と同速で走行し、クランプで固定後、出側配置の下刃が上昇して固定上刃とすれ違うアップカット剪断</span></div></li>
-        <li><span class="dot" style="background:#3f6ea8"></span><div><b>⑤ ランアウトコンベア</b><br><span>ラインの約1.5倍に増速して搬送し、切板間にギャップを形成（詰まり時はラインが自動一時停止）</span></div></li>
-        <li><span class="dot" style="background:#4a8a86"></span><div><b>⑥ スタッカー</b><br><span>板幅に追従するエッジガイドロール上を搬送し、定位置でロールが退避して落下積載。リフトは自動下降し受取高さ一定（8枚で搬出）</span></div></li>
-      </ul>
-    </div>
-
-    <div class="sec">
-      <details open>
-        <summary>解説：フライングシャーとは</summary>
-        <div class="body">
-          <p><b>フライングシャー（走間剪断機）</b>は、連続して流れてくる板を<b>ラインを止めずに</b>定尺切断する装置です。切断の瞬間、刃を載せたキャリッジが板と同じ速度で走行することで、板に対する刃の相対速度がゼロになり、直角できれいな切り口が得られます。</p>
-          <ol>
-            <li>測長ロールで送り長さを計測</li>
-            <li>目標長さの直前でキャリッジが加速し、板速度に同期</li>
-            <li>クランプが板を固定し、同期を保ったまま下刃がライン速度と同調した機械式駆動で上昇（アップカット）→ 固定上刃とのすれ違いで剪断</li>
-            <li>刃・クランプが開放後、キャリッジは減速・後退して原位置へ復帰</li>
-          </ol>
-          <p>切断された板はランアウトコンベアで約1.5倍に増速されて前の板から引き離され、スタッカーのエッジガイドロール上をストッパまで搬送された後、上部ヒンジを軸としたガイドロールの振り出し退避により、一定高さのパイル上面へ落下・積載されます。出側が詰まった場合はラインが自動で一時停止し、追突を防ぎます。</p>
-          <p class="note">※板厚・寸法・速度は、動作を見やすくするため誇張しています（1目盛=1m相当）。<br>3D描画: Three.js r149（MIT License, 本ファイルに同梱）</p>
-        </div>
-      </details>
-    </div>
-  </aside>
+  </footer>
 </div>
 
 <script>
@@ -1096,9 +1160,13 @@ const PRESETS = {
   top:  {yaw:1.57+Math.PI, pitch:1.45, dist:60, tx:-4,  ty:0,   tz:0}
 };
 let camAnim=null;
+const DIST_MAX = 100;   // ズームアウト上限（縦長画面の全体視点も収まるように）
 function goPreset(name){
   ui.chkFollow.checked = false;
-  camAnim = {t:0, from:{...cam}, to:PRESETS[name]};
+  const to = {...PRESETS[name]};
+  // 縦長画面（スマートフォン）では全体系の視点を引いて、ライン全長を画面に収める
+  if((name==='all'||name==='top') && camera.aspect < 1.2) to.dist *= Math.min(1.7, 1.2/camera.aspect);
+  camAnim = {t:0, from:{...cam}, to};
 }
 function updateCamera(dt){
   if(camAnim){
@@ -1122,7 +1190,29 @@ function updateCamera(dt){
   camera.lookAt(cam.tx, cam.ty, cam.tz);
 }
 
-/* ---------- オーバーレイ（ラベル・切断フラッシュ） ---------- */
+/* ---------- 機器テーブル（3Dラベル・機器ナビ・構成リストで共通の番号/色/名称） ---------- */
+// lp: ラベルを付ける3D位置, fx/fd: 機器ナビで移動するカメラ注視点xと距離
+const EQUIP=[
+  {k:1, s:'コイル',   n:'アンコイラー',               c:'#96a4b4', lp:()=>[COIL_X, COIL_CY+2.0, 0], fx:COIL_X, fd:12,
+   d:'ピット設置。コイル上側からパスライン高さ付近で払い出し、スナバロールが緩み止めとして外周に追従'},
+  {k:2, s:'レベラー', n:'レベラー（矯正機）',          c:'#4a6ea0', lp:()=>[-19.2, 3.4, 0], fx:-19.2, fd:10,
+   d:'千鳥配置のワークロールで巻きぐせ・反りを矯正。ワークロールは中間ロール・バックアップロールで支持される6段構成'},
+  {k:3, s:'ルーパー', n:'ルーパー（貯留ループ）',      c:'#7a8fa6', lp:()=>[LOOP_X, PL+0.9, 0], fx:LOOP_X, fd:16,
+   d:'レベラーと測長ロールの間にピット設置の貯留ループを設置。垂下量は板厚に応じた自重たわみ計算値（薄板ほど深く垂れる）とし、ピットにより床と接触しない。張力変動やシャー振動の上流波及を抑制。未使用時は折畳みローラーテーブルを展開して直通通板'},
+  {k:4, s:'測長',     n:'測長ピンチロール',            c:'#5b7186', lp:()=>[-6, 3.0, 0], fx:-6, fd:8,
+   d:'板に密着して送り長さを計測'},
+  {k:5, s:'シャー',   n:'フライングシャー（走間剪断機）', c:'#e2a13a', lp:()=>[S.xc, 3.7, 0], fx:-1.2, fd:9.5,
+   d:'板と同速で走行し、クランプで固定後、出側配置の下刃が上昇して固定上刃とすれ違うアップカット剪断'},
+  {k:6, s:'コンベア', n:'ランアウトコンベア',          c:'#3f6ea8', lp:()=>[9.5, 2.5, 0], fx:9.5, fd:14,
+   d:'ラインの約1.5倍に増速して搬送し、切板間にギャップを形成（詰まり時はラインが自動一時停止）'},
+  {k:7, s:'スタッカー', n:'スタッカー（積載）',        c:'#4a8a86', lp:()=>[STK_CX+0.3, 3.1, 0], fx:STK_CX+0.8, fd:17,
+   d:'板幅に追従するエッジガイドロール上を搬送し、定位置でロールが退避して落下積載。リフトは自動下降し受取高さ一定（8枚で搬出）'}
+];
+const HOVER_DEFAULT=5;          // 何もホバーしていない時は主役のシャーを正式名で強調
+let hoverEq=HOVER_DEFAULT, labelHits=[];
+const UI_FONT='system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif';
+
+/* ---------- オーバーレイ（ラベル・切断フラッシュ・キャリッジ状態） ---------- */
 let Wc=0, Hc=0, dprO=1;
 const _pv = new THREE.Vector3();
 function proj(x,y,z){
@@ -1151,61 +1241,103 @@ function drawOverlay(){
       octx.fillStyle=rg; octx.beginPath(); octx.arc(m[0],m[1],r,0,7); octx.fill();
     }
   }
-  // ラベル
-  if(!ui.chkLabels.checked) return;
-  const labels=[
-    {p:[COIL_X, COIL_CY+2.0, 0], t:'アンコイラー'},
-    {p:[LOOP_X, PL+0.9, 0], t:'ルーパー（貯留ループ）', small:true},
-    {p:[-19.2, 3.4, 0], t:'レベラー（矯正機）'},
-    {p:[-6, 3.0, 0], t:'測長ピンチロール'},
-    {p:[S.xc, 3.7, 0], t:'フライングシャー（走間剪断機）'},
-    {p:[9.5, 2.5, 0], t:'ランアウトコンベア'},
-    {p:[STK_CX+0.3, 3.1, 0], t:'スタッカー（積載）'}
-  ];
-  octx.textAlign='center'; octx.textBaseline='middle';
-  for(let i=0;i<labels.length;i++){
-    const L=labels[i], q=proj(...L.p);
-    if(!q) continue;
-    const [sx,sy]=q;
-    if(sx<-40||sx>Wc+40||sy<-20||sy>Hc+20) continue;
-    const fs=L.small?11:12;
-    octx.font=`${fs}px system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif`;
-    const w=octx.measureText(L.t).width+16, h=fs+10;
-    const by=sy-(26+(i%2)*30);
-    octx.strokeStyle='rgba(200,215,230,0.5)'; octx.lineWidth=1;
-    octx.beginPath(); octx.moveTo(sx,sy); octx.lineTo(sx,by+h/2); octx.stroke();
-    octx.fillStyle='rgba(16,21,28,0.85)';
-    octx.strokeStyle='rgba(150,170,190,0.45)';
-    octx.beginPath();
-    if(octx.roundRect) octx.roundRect(sx-w/2,by-h/2,w,h,6); else octx.rect(sx-w/2,by-h/2,w,h);
-    octx.fill(); octx.stroke();
-    octx.fillStyle='#e8eef5';
-    octx.fillText(L.t, sx, by+0.5);
+  // 機器ラベル：番号＋名称のピル。遠景では短縮名、ホバー中の機器は正式名で強調。
+  // 画面上の矩形が重ならないよう、キャリッジのバッジを先に確保してから上方向へ段をずらして配置する
+  const bRect = drawCarriageBadge(false);
+  labelHits = [];
+  if(!ui.chkLabels.checked){ drawCarriageBadge(true); return; }
+  const far = cam.dist > 24;
+  const items = [];
+  for(const E of EQUIP){
+    const q = proj(...E.lp());
+    if(!q || q[0]<-40 || q[0]>Wc+40 || q[1]<-20 || q[1]>Hc+20) continue;
+    const big = E.k===hoverEq;
+    const t = (far && !big) ? E.s : E.n;
+    const fs = big?13:11.5, h = big?24:21;
+    octx.font = `${big?600:500} ${fs}px ${UI_FONT}`;
+    items.push({E, t, big, fs, h, sx:q[0], sy:q[1], w:octx.measureText(t).width+h+10});
   }
+  const placed = bRect ? [bRect] : [];
+  const hit = (a,b)=>a.x<b.x+b.w+3 && b.x<a.x+a.w+3 && a.y<b.y+b.h+3 && b.y<a.y+a.h+3;
+  items.sort((a,b)=>(b.big-a.big) || (a.E.k===5?-1:b.E.k===5?1:0) || a.sx-b.sx);
+  for(const it of items){
+    const x = Math.min(Wc-it.w-4, Math.max(4, it.sx-it.w/2));
+    let r = null;
+    for(let lv=0; lv<9 && !r; lv++){
+      const c = {x, y:it.sy-24-it.h-lv*(it.h+4), w:it.w, h:it.h};
+      if(!placed.some(p=>hit(p,c))) r = c;
+    }
+    it.r = r || {x, y:it.sy-24-it.h, w:it.w, h:it.h};
+    placed.push(it.r);
+  }
+  octx.textBaseline='middle';
+  for(const it of items){
+    const {r, E} = it, cy = r.y + r.h/2;
+    octx.strokeStyle='rgba(200,215,230,0.45)'; octx.lineWidth=1;
+    octx.beginPath(); octx.moveTo(it.sx,it.sy); octx.lineTo(Math.min(r.x+r.w-6,Math.max(r.x+6,it.sx)), r.y+r.h); octx.stroke();
+    octx.fillStyle=E.c; octx.beginPath(); octx.arc(it.sx,it.sy,2.5,0,7); octx.fill();
+    octx.fillStyle='rgba(16,21,28,0.9)';
+    octx.strokeStyle=it.big?E.c:'rgba(150,170,190,0.4)'; octx.lineWidth=it.big?1.5:1;
+    octx.beginPath();
+    if(octx.roundRect) octx.roundRect(r.x,r.y,r.w,r.h,r.h/2); else octx.rect(r.x,r.y,r.w,r.h);
+    octx.fill(); octx.stroke();
+    octx.fillStyle=E.c; octx.beginPath(); octx.arc(r.x+r.h/2, cy, r.h/2-3, 0, 7); octx.fill();
+    octx.fillStyle='#fff'; octx.textAlign='center'; octx.font=`700 ${it.fs-1.5}px ${UI_FONT}`;
+    octx.fillText(E.k, r.x+r.h/2, cy+0.5);
+    octx.fillStyle='#e8eef5'; octx.textAlign='left'; octx.font=`${it.big?600:500} ${it.fs}px ${UI_FONT}`;
+    octx.fillText(it.t, r.x+r.h+2, cy+0.5);
+    labelHits.push({k:E.k, r});
+  }
+  drawCarriageBadge(true);
+}
+
+/* キャリッジ上の状態バッジ（待機／加速○%／同期100%／戻り）。draw=false なら占有矩形のみ返す */
+function drawCarriageBadge(draw){
+  const q = proj(S.xc, 2.75, -1.0);
+  if(!q) return null;
+  const sync = S.v>0 ? Math.max(0,S.vc)/S.v*100 : 0;
+  let t, col;
+  if(S.hold && S.phase!=='RETURN'){ t='出側待ち'; col='#ff8a65'; }
+  else if(S.phase==='FEED'){ t='待機'; col='#9db0c4'; }
+  else if(S.phase==='SYNC'){ t='加速 '+sync.toFixed(0)+'%'; col=sync>99?'#5ecb8a':'#e2a13a'; }
+  else if(S.phase==='CUT'){ t='同期 '+sync.toFixed(0)+'%'; col='#5ecb8a'; }
+  else { t='戻り '+(Math.abs(S.vc)*60).toFixed(0)+' m/min'; col='#9db0c4'; }
+  octx.font = `600 12px ${UI_FONT}`;
+  const w = octx.measureText(t).width+34, h = 24, x = q[0]-w/2, y = q[1]-h;
+  if(!draw) return {x, y, w, h};
+  octx.fillStyle='rgba(16,21,28,0.92)'; octx.strokeStyle=col; octx.lineWidth=1.5;
+  octx.beginPath();
+  if(octx.roundRect) octx.roundRect(x,y,w,h,12); else octx.rect(x,y,w,h);
+  octx.fill(); octx.stroke();
+  octx.fillStyle=col; octx.beginPath(); octx.arc(x+13,y+12,5,0,7); octx.fill();
+  octx.fillStyle='#e8eef5'; octx.textAlign='left'; octx.textBaseline='middle';
+  octx.fillText(t, x+23, y+12.5);
+  return {x, y, w, h};
 }
 
 /* ---------- HUD ---------- */
 const ui={};
 for(const id of ['btnRun','btnReset','rngSpeed','valSpeed','rngLen','valLen','rngWidth','valWidth','rngThick','valThick',
-  'chkLabels','chkRotate','chkShadow','chkFollow','chkLoop','stLine','stCar','stSync','stMeas',
-  'measbar','stCount','stLast','stPallet','ph0','ph1','ph2','ph3'])
+  'chkLabels','chkRotate','chkShadow','chkFollow','chkLoop','stLine','stMeas',
+  'measbar','pb1','pb2','pb3','stCount','stLast','stPallet','ph0','ph1','ph2','ph3'])
   ui[id]=document.getElementById(id);
 
 const PHASE_IDX={FEED:0,SYNC:1,CUT:2,RETURN:3};
 function updateHUD(){
   ui.stLine.textContent=(S.v*60).toFixed(0)+' m/min'+(S.hold?'（出側待ち）':'');
-  ui.stCar.textContent=(Math.abs(S.vc)*60).toFixed(0)+' m/min'+(S.vc<0?' (戻り)':'');
-  const sync=S.v>0?Math.max(0,S.vc)/S.v*100:0;
-  ui.stSync.textContent=sync.toFixed(0)+' %';
-  ui.stSync.style.color=sync>99?'var(--ok)':'';
+  ui.stLine.classList.toggle('warn',S.hold);
   const meas=Math.max(0,S.xF-S.lastCutRef);
-  ui.stMeas.textContent=meas.toFixed(2)+' / '+S.CL.toFixed(2)+' m';
-  ui.measbar.style.width=Math.min(100,meas/S.CL*100)+'%';
+  ui.stMeas.textContent=' '+meas.toFixed(2)+' / '+S.CL.toFixed(2)+' m';
   ui.stCount.textContent=S.cutCount+' 枚';
   ui.stLast.textContent=S.lastLen>0?S.lastLen.toFixed(2)+' m':'–';
   ui.stPallet.textContent=S.palletCount+' 回';
+  // 工程ステッパー：現在工程を強調し、各工程内の進み具合をバーで表示
   const idx=PHASE_IDX[S.phase];
-  for(let i=0;i<4;i++) ui['ph'+i].classList.toggle('on', i===idx);
+  for(let i=0;i<4;i++){ ui['ph'+i].classList.toggle('on', i===idx); ui['ph'+i].classList.toggle('done', i<idx); }
+  ui.measbar.style.width=(idx===0?Math.min(100,meas/S.CL*100):0)+'%';
+  ui.pb1.style.width=(idx===1&&S.v>0?Math.max(0,S.vc)/S.v*100:0)+'%';
+  ui.pb2.style.width=(idx===2?(S.bladeDir>0?S.bladePos/STROKE*50:50+(1-S.bladePos/STROKE)*50):0)+'%';
+  ui.pb3.style.width=(idx===3?100:0)+'%';
 }
 
 /* ---------- 操作 ---------- */
@@ -1239,6 +1371,7 @@ document.querySelectorAll('.ts').forEach(b=>b.addEventListener('click',()=>{
 document.querySelectorAll('.vw').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.vw').forEach(x=>x.classList.remove('sel'));
   b.classList.add('sel'); goPreset(b.dataset.view);
+  document.querySelectorAll('.eq').forEach(x=>x.classList.remove('on'));
 }));
 ui.chkRotate.addEventListener('change',()=>{cam.auto=ui.chkRotate.checked;});
 ui.chkShadow.addEventListener('change',()=>{sun.castShadow=ui.chkShadow.checked;});
@@ -1259,7 +1392,7 @@ cv.addEventListener('pointermove',e=>{
     if(ks.length===2){
       const A=pinch.pts[ks[0]],B=pinch.pts[ks[1]];
       const d=Math.hypot(A[0]-B[0],A[1]-B[1]);
-      if(pinch.d0>0) cam.dist=Math.min(60,Math.max(4.5,cam.dist*pinch.d0/d));
+      if(pinch.d0>0) cam.dist=Math.min(DIST_MAX,Math.max(4.5,cam.dist*pinch.d0/d));
       pinch.d0=d;
     }
     return;
@@ -1287,9 +1420,75 @@ cv.addEventListener('pointerup',endPtr);
 cv.addEventListener('pointercancel',endPtr);
 cv.addEventListener('wheel',e=>{
   e.preventDefault();
-  cam.dist=Math.min(60,Math.max(4.5,cam.dist*Math.exp(e.deltaY*0.0012)));
+  cam.dist=Math.min(DIST_MAX,Math.max(4.5,cam.dist*Math.exp(e.deltaY*0.0012)));
 },{passive:false});
 cv.addEventListener('dblclick',()=>goPreset('all'));
+
+/* ---------- 機器ナビ・構成リスト（番号・色は3Dラベルと共通） ---------- */
+const eqbar=document.getElementById('eqbar');
+eqbar.innerHTML=EQUIP.map(E=>`<button class="eq" data-k="${E.k}" title="${E.n}へ移動"><i style="background:${E.c}">${E.k}</i>${E.s}</button>`).join('');
+document.getElementById('eqlist').innerHTML=EQUIP.map(E=>
+  `<li><details><summary><i style="background:${E.c}">${E.k}</i><b>${E.n}</b></summary><p>${E.d}</p></details></li>`).join('');
+function focusEquip(k){
+  const E=EQUIP[k-1];
+  ui.chkFollow.checked=false;
+  document.querySelectorAll('.vw').forEach(x=>x.classList.remove('sel'));
+  document.querySelectorAll('.eq').forEach(x=>x.classList.toggle('on', +x.dataset.k===k));
+  camAnim={t:0, from:{...cam}, to:{yaw:0.75+Math.PI, pitch:0.32, dist:E.fd, tx:E.fx, ty:1.5, tz:0}};
+}
+document.querySelectorAll('.eq').forEach(b=>{
+  b.addEventListener('click',()=>focusEquip(+b.dataset.k));
+  b.addEventListener('mouseenter',()=>{hoverEq=+b.dataset.k;});
+  b.addEventListener('mouseleave',()=>{hoverEq=HOVER_DEFAULT;});
+});
+
+/* 3Dラベル：ホバーで強調、クリック（ドラッグでない）で機器へ移動 */
+const relPos=e=>{const r=cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top];};
+const pickLabel=p=>labelHits.find(h=>p[0]>=h.r.x&&p[0]<=h.r.x+h.r.w&&p[1]>=h.r.y&&p[1]<=h.r.y+h.r.h);
+let downPos=null;
+cv.addEventListener('pointermove',e=>{
+  if(drag) return;
+  const h=pickLabel(relPos(e));
+  hoverEq=h?h.k:HOVER_DEFAULT;
+  cv.style.cursor=h?'pointer':'';
+});
+cv.addEventListener('pointerleave',()=>{hoverEq=HOVER_DEFAULT; cv.style.cursor='';});
+cv.addEventListener('pointerdown',e=>{downPos=relPos(e);});
+cv.addEventListener('pointerup',e=>{
+  const p=relPos(e);
+  if(downPos && Math.hypot(p[0]-downPos[0],p[1]-downPos[1])<5){ const h=pickLabel(p); if(h) focusEquip(h.k); }
+  downPos=null;
+});
+
+/* ---------- ポップオーバー（構成・解説／表示設定） ---------- */
+const closePops=()=>{
+  document.querySelectorAll('.pop').forEach(p=>p.classList.remove('show'));
+  document.querySelectorAll('[data-pop]').forEach(x=>x.classList.remove('act'));
+};
+document.querySelectorAll('[data-pop]').forEach(b=>b.addEventListener('click',e=>{
+  e.stopPropagation();
+  const t=document.getElementById(b.dataset.pop), wasOpen=t.classList.contains('show');
+  closePops();
+  if(!wasOpen){ t.classList.add('show'); b.classList.add('act'); }
+}));
+document.querySelectorAll('.pop').forEach(p=>p.addEventListener('click',e=>e.stopPropagation()));
+document.addEventListener('click',closePops);
+document.querySelectorAll('.pclose').forEach(b=>b.addEventListener('click',closePops));
+cv.addEventListener('pointerdown',closePops);
+
+/* ---------- モバイル：運転ドックをボトムシートとして開閉 ---------- */
+const dock=document.getElementById('dock'), grab=document.getElementById('grab');
+grab.addEventListener('click',()=>{
+  dock.classList.toggle('open');
+  grab.textContent=dock.classList.contains('open')?'閉じる':'運転条件';
+});
+
+/* ---------- キーボード・操作ヒント ---------- */
+document.addEventListener('keydown',e=>{
+  if(e.code!=='Space' || e.target.closest('input,button,textarea')) return;
+  e.preventDefault(); ui.btnRun.click();
+});
+setTimeout(()=>document.getElementById('hint').classList.add('fade'),8000);
 
 /* ---------- リサイズ ---------- */
 function resize(){
@@ -1303,6 +1502,7 @@ function resize(){
   octx.setTransform(dprO,0,0,dprO,0,0);
 }
 window.addEventListener('resize',resize);
+new ResizeObserver(resize).observe(cv.parentElement);  // ドック開閉・レイアウト変化にも追従
 
 /* ---------- メインループ ---------- */
 let tPrev=performance.now();
