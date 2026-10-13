@@ -52,7 +52,8 @@
   #view{flex:1; position:relative; min-width:0; min-height:0;}
   canvas#c{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none;}
   canvas#c.dragging{cursor:grabbing;}
-  canvas#ov{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
+  canvas#ov{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 48%, transparent 60%, rgba(5,8,12,.45) 100%);}  /* 周辺減光で視線を中央へ */
 
   /* ---- HUD：工程ステッパー（各工程の進捗を内包） ---- */
   #phasebar{
@@ -179,7 +180,7 @@
 </head>
 <body>
 <header>
-  <h1>フライングシャーライン 3Dシミュレータ <span class="ver">v1.1.0</span></h1>
+  <h1>フライングシャーライン 3Dシミュレータ <span class="ver">v1.2.0</span></h1>
   <span class="sub">アルミニウム板 連続切断工程（走間剪断）の動作モデル</span>
   <div class="hr"><button class="ibtn" data-pop="popInfo" title="ライン構成・解説・操作方法">ⓘ<span class="t"> 構成・解説</span></button></div>
 </header>
@@ -539,33 +540,46 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMappingExposure = 0.95;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x151c26);
-scene.fog = new THREE.Fog(0x151c26, 55, 115);
+scene.fog = new THREE.Fog(0x171d25, 55, 130);   // 床の遠方を背景色に溶かし、床の端を見せない
+{ // 背景：上から下へ暗くなる縦グラデーション（工場建屋の奥行き感）
+  const bc = document.createElement('canvas'); bc.width=4; bc.height=256;
+  const g = bc.getContext('2d'), lg = g.createLinearGradient(0,0,0,256);
+  lg.addColorStop(0,'#26303c'); lg.addColorStop(0.55,'#171d25'); lg.addColorStop(1,'#11151b');
+  g.fillStyle=lg; g.fillRect(0,0,4,256);
+  const bt = new THREE.CanvasTexture(bc); bt.encoding = THREE.sRGBEncoding;
+  scene.background = bt;
+}
 
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 260);   // やや望遠寄り：手前の機器が過大に写る遠近の歪みを抑える
 
-/* 環境マップ（金属の映り込み用の簡易グラデーション空） */
+/* 環境マップ（金属の映り込み用。工場建屋の天井照明列・採光窓帯を描いた手続き生成パノラマ） */
 {
-  const ec = document.createElement('canvas'); ec.width=64; ec.height=32;
-  const g = ec.getContext('2d');
-  const gr = g.createLinearGradient(0,0,0,32);
-  gr.addColorStop(0,'#9db8cf'); gr.addColorStop(0.5,'#5c6f82');
-  gr.addColorStop(0.55,'#3a4450'); gr.addColorStop(1,'#20262e');
-  g.fillStyle=gr; g.fillRect(0,0,64,32);
+  const W=512, H=256, ec=document.createElement('canvas'); ec.width=W; ec.height=H;
+  const g=ec.getContext('2d');
+  const gr=g.createLinearGradient(0,0,0,H);
+  gr.addColorStop(0,'#2a3340'); gr.addColorStop(0.42,'#4a5868'); gr.addColorStop(0.5,'#6d7c8c');
+  gr.addColorStop(0.52,'#2c333c'); gr.addColorStop(1,'#15191e');
+  g.fillStyle=gr; g.fillRect(0,0,W,H);
+  for(let r=0;r<3;r++) for(let c=0;c<16;c++){          // 天井の照明列
+    g.fillStyle='rgba(255,246,225,'+(0.95-r*0.25)+')';
+    g.fillRect(c*32+8, 14+r*22, 18, 5+(2-r)*2);
+  }
+  g.fillStyle='rgba(200,225,255,0.85)';                 // 壁の採光窓帯
+  for(let c=0;c<24;c++) g.fillRect(c*21+3, 96, 15, 16);
   const envTex = new THREE.CanvasTexture(ec);
-  envTex.mapping = THREE.EquirectangularReflectionMapping;
+  envTex.mapping = THREE.EquirectangularReflectionMapping; envTex.encoding = THREE.sRGBEncoding;
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromEquirectangular(envTex).texture;
   pmrem.dispose(); envTex.dispose();
 }
 
 /* 照明 */
-const hemi = new THREE.HemisphereLight(0xbdd4e8, 0x2c3036, 0.22);
+const hemi = new THREE.HemisphereLight(0xbdd4e8, 0x2c3036, 0.30);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff2dd, 0.85);
+const sun = new THREE.DirectionalLight(0xfff2dd, 0.95);
 sun.position.set(13, 20, 9);
 sun.target.position.set(1, 0, 0);
 sun.castShadow = true;
@@ -573,11 +587,13 @@ sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left=-26; sun.shadow.camera.right=26;
 sun.shadow.camera.top=15;   sun.shadow.camera.bottom=-15;
 sun.shadow.camera.near=2;   sun.shadow.camera.far=60;
-sun.shadow.bias = -0.0004;
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
 scene.add(sun, sun.target);
-const fill = new THREE.DirectionalLight(0x88aaff, 0.12);
+const fill = new THREE.DirectionalLight(0x88aaff, 0.2);
 fill.position.set(-14, 10, -12);
-scene.add(fill);
+const rim = new THREE.DirectionalLight(0xc8dcff, 0.4);   // 手前側からの輪郭光（機器の陰側を締めすぎない）
+rim.position.set(-6, 9, 15);
+scene.add(fill, rim);
 
 /* ---------- 材質 ---------- */
 function mat(color, rough, metal, env=0.4){
@@ -590,30 +606,55 @@ const M = {
   steelD: mat(0x3d4a55, .7, .45),
   steelL: mat(0x8b9dab, .5, .6),
   dark  : mat(0x23282e, .8, .3),
-  roller: mat(0x9fadba, .35, .85, .65),
+  roller: mat(0x9fadba, .28, .85, 1.0),
   mark  : mat(0x46525e, .6, .4),
-  alu   : mat(0xd4dae1, .3, .9, .8),
+  alu   : mat(0xd4dae1, .24, .9, 1.15),
   yellow: mat(0xdd9724, .5, .2),
   orange: mat(0xcf6b28, .5, .2),
-  blade : mat(0xcfd8e2, .16, .95, .9),
+  blade : mat(0xcfd8e2, .16, .95, 1.2),
   levBlu: mat(0x3f6394, .6, .25),
   convBl: mat(0x35619b, .6, .25),
   teal  : mat(0x3d7a76, .6, .2),
   pallet: mat(0x82684a, .9, 0, .15),
-  floor : mat(0x1f242b, .95, .05, .1),
-  aisle : mat(0x2a3038, .95, .05, .1),
-  zone  : mat(0x3f3c2e, .95, .05, .12),
+  floor : mat(0x3a4048, .9, .05, .1),
+  aisle : mat(0x4a525c, .8, .05, .1),
+  zone  : mat(0x5a5330, .95, .05, .12),
   hazard: mat(0xa88a34, .8, .1, .15),
   pitWall: mat(0x262c33, .9, .1, .1),
   pitFloor: mat(0x1a1f25, .95, .05, .08)
 };
+// 塗装鋼材・機体色は環境光の映り込みを少し強め、面の向きの違いが読み取れるようにする
+for(const k of ['steel','steelD','steelL','yellow','orange','levBlu','convBl','teal']) M[k].envMapIntensity = 0.7;
 
 /* ---------- 形状ヘルパ ---------- */
 const spinners = [];   // {mesh, r, dir, kind:'line'|'conv'}
+/* 箱形状は角を小さく面取りし（稜線に光が乗って立体感が出る）、細い輪郭線を重ねる。
+   同寸法の形状はキャッシュして共有する */
+const _boxGeo = new Map(), _edgeGeo = new Map();
+const EDGE_MAT = new THREE.LineBasicMaterial({color:0x0b0f14, transparent:true, opacity:0.28});
+function chamferBoxGeo(sx,sy,sz){
+  const key = sx+'_'+sy+'_'+sz;
+  let g = _boxGeo.get(key);
+  if(g) return g;
+  const b = Math.min(0.03, Math.min(sx,sy,sz)*0.18);
+  if(Math.min(sx,sy,sz) < 0.035){ g = new THREE.BoxGeometry(sx,sy,sz); }
+  else{
+    const hx = sx/2-b, hy = sy/2-b, sh = new THREE.Shape();
+    sh.moveTo(-hx,-hy); sh.lineTo(hx,-hy); sh.lineTo(hx,hy); sh.lineTo(-hx,hy); sh.lineTo(-hx,-hy);
+    g = new THREE.ExtrudeGeometry(sh, {depth:sz-2*b, bevelEnabled:true, bevelThickness:b, bevelSize:b, bevelSegments:2, curveSegments:1});
+    g.translate(0, 0, -(sz-2*b)/2);
+  }
+  _boxGeo.set(key, g);
+  return g;
+}
 function addBox(parent,x,y,z,sx,sy,sz,material,shadow=true){
-  const m = new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz), material);
+  const m = new THREE.Mesh(chamferBoxGeo(sx,sy,sz), material);
   m.position.set(x,y,z);
   m.castShadow = shadow; m.receiveShadow = true;
+  const key = sx+'_'+sy+'_'+sz;
+  let eg = _edgeGeo.get(key);
+  if(!eg){ eg = new THREE.EdgesGeometry(new THREE.BoxGeometry(sx,sy,sz)); _edgeGeo.set(key, eg); }
+  m.add(new THREE.LineSegments(eg, EDGE_MAT));
   parent.add(m);
   return m;
 }
@@ -676,11 +717,30 @@ function rollerTable(rxs, kind){
   return g;
 }
 
-/* ---------- 床（アンコイラー・ルーパーピット分の開口を持たせる） ---------- */
+/* ---------- 床（アンコイラー・ルーパーピット分の開口を持たせる） ----------
+   床は十分に広く取り、遠方は霧で背景に溶かす（床の端の直線を見せない）。
+   コンクリート調の手続きテクスチャ（6m角の目地）を貼り、ライン沿いの作業帯を一段明るくして機器を浮き立たせる */
 {
+  const tc = document.createElement('canvas'); tc.width = tc.height = 512;
+  const g = tc.getContext('2d');
+  g.fillStyle = '#80868c'; g.fillRect(0,0,512,512);
+  const id = g.getImageData(0,0,512,512), a = id.data;
+  for(let i=0;i<a.length;i+=4){ const n=(Math.random()-0.5)*7; a[i]+=n; a[i+1]+=n; a[i+2]+=n; }
+  g.putImageData(id,0,0);
+  for(let i=0;i<24;i++){                       // ごく淡いむら
+    const c = Math.random()<.5 ? 0 : 255;
+    g.fillStyle = `rgba(${c},${c},${c},0.018)`;
+    g.beginPath(); g.arc(Math.random()*512, Math.random()*512, 30+Math.random()*90, 0, 7); g.fill();
+  }
+  g.strokeStyle = 'rgba(30,34,40,0.4)'; g.lineWidth = 1.5; g.strokeRect(0.75,0.75,510.5,510.5);  // 目地
+  const tex = new THREE.CanvasTexture(tc);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1/6, 1/6);   // ShapeGeometry の UV=ワールド座標
+  tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+  M.floor.map = tex;
+
   const floorShape = new THREE.Shape();
-  floorShape.moveTo(-32,-10); floorShape.lineTo(32,-10);
-  floorShape.lineTo(32,10);   floorShape.lineTo(-32,10); floorShape.lineTo(-32,-10);
+  floorShape.moveTo(-160,-160); floorShape.lineTo(160,-160);
+  floorShape.lineTo(160,160);   floorShape.lineTo(-160,160); floorShape.lineTo(-160,-160);
   const addHole=(cx,cz,hx,hz)=>{
     const p = new THREE.Path();
     p.moveTo(cx-hx,cz-hz); p.lineTo(cx+hx,cz-hz);
@@ -693,20 +753,40 @@ function rollerTable(rxs, kind){
   gnd.rotation.x = -Math.PI/2; gnd.receiveShadow = true;
   scene.add(gnd);
   const grid = new THREE.GridHelper(64, 32, 0x333d48, 0x272e37);
-  grid.material.transparent = true; grid.material.opacity = 0.45;
-  grid.position.y = 0.002;
+  grid.material.transparent = true; grid.material.opacity = 0.32;
+  grid.position.y = 0.004;
   scene.add(grid);
   const mkPlane=(w,d,x,z,y,material)=>{
     const p = new THREE.Mesh(new THREE.PlaneGeometry(w,d), material);
     p.rotation.x = -Math.PI/2; p.position.set(x,y,z); p.receiveShadow = true;
     scene.add(p);
   };
-  mkPlane(28, 6.2, 6.85, 0, 0.006, M.aisle);           // アンコイラー・ループ両ピットを避けて敷設
+  // ライン沿いの作業帯（ハザード線の内側）。ピットの開口は避けて敷設する
+  const AZ = 3.1;
+  mkPlane(28, AZ*2, 6.85, 0, 0.006, M.aisle);                                   // ループピット出側～スタッカー
+  mkPlane(5.6, AZ*2, (COIL_X+PIT_HALF_X+LOOP_X-LOOP_PIT_HALF_X)/2, 0, 0.006, M.aisle);   // 両ピット間
+  mkPlane(1.4, AZ*2, COIL_X-PIT_HALF_X-0.7, 0, 0.006, M.aisle);                  // アンコイラーピット入側
+  for(const sz of [-1, 1]){                                                      // ピット脇の帯
+    mkPlane(PIT_HALF_X*2, AZ-PIT_HALF_Z, COIL_X, sz*(AZ+PIT_HALF_Z)/2, 0.006, M.aisle);
+    mkPlane(LOOP_PIT_HALF_X*2, AZ-LOOP_PIT_HALF_Z, LOOP_X, sz*(AZ+LOOP_PIT_HALF_Z)/2, 0.006, M.aisle);
+  }
   mkPlane(7.6, 6.2, -0.25, 0, 0.010, M.zone);          // シャー安全域
   mkPlane(48, 0.16, -3.2, -3.18, 0.014, M.hazard);
   mkPlane(48, 0.16, -3.2,  3.18, 0.014, M.hazard);
   addPit(COIL_X, PIT_HALF_X, PIT_HALF_Z, PIT_FLOOR);   // アンコイラーピット
   addPit(LOOP_X, LOOP_PIT_HALF_X, LOOP_PIT_HALF_Z, LOOP_PIT_FLOOR); // ループピット
+  // 接地影（機器の足元をぼかした影で落ち着かせる簡易アンビエントオクルージョン）
+  const sc = document.createElement('canvas'); sc.width = sc.height = 128;
+  const s2 = sc.getContext('2d'), rg = s2.createRadialGradient(64,64,4,64,64,64);
+  rg.addColorStop(0,'rgba(0,0,0,0.7)'); rg.addColorStop(0.6,'rgba(0,0,0,0.35)'); rg.addColorStop(1,'rgba(0,0,0,0)');
+  s2.fillStyle = rg; s2.fillRect(0,0,128,128);
+  const blobMat = new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc), transparent:true, depthWrite:false, opacity:0.75});
+  const blob=(x,sx,sz)=>{
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(sx,sz), blobMat);
+    m.rotation.x = -Math.PI/2; m.position.set(x, 0.018, 0); scene.add(m);
+  };
+  blob(-19.2, 5, 4.6); blob(-6, 2.6, 4.4); blob(-0.25, 8.2, 5.4); blob(9.5, 14, 4.0);
+  blob(STK_CX, STK_LEN+2, 5.2); blob(LOOP_X+LOOP_HALF_X, 1, 3.4); blob(LOOP_X-LOOP_HALF_X, 1, 3.4);
 }
 
 /* ---------- ① アンコイラー ---------- */
@@ -1153,20 +1233,59 @@ function updateDynamics(dt){
 /* ---------- カメラ ---------- */
 // yawに+PIした側（反対側）をデフォルト視点とする：ライン材料の流れが右→左に見える
 const cam = {yaw:0.55+Math.PI, pitch:0.40, dist:52, tx:-4, ty:1.4, tz:0, auto:false};
+// 距離の基準値は画角50°で決めたもの。現在の画角で同じ写り方になるよう換算する係数
+const FOV_K = Math.tan(25*Math.PI/180)/Math.tan(camera.fov*Math.PI/360);
+// 各視点は「向き」と「収める範囲（x0～x1）」で定義し、距離・注視点は画面サイズに合わせて自動算出する
 const PRESETS = {
-  all:  {yaw:0.55+Math.PI, pitch:0.40, dist:52, tx:-4,  ty:1.4, tz:0},
-  shear:{yaw:0.85+Math.PI, pitch:0.28, dist:9.5,tx:-1.2, ty:1.7, tz:0},
-  out:  {yaw:0.55+Math.PI, pitch:0.34, dist:19, tx:STK_CX+0.8, ty:1.2, tz:0},
-  top:  {yaw:1.57+Math.PI, pitch:1.45, dist:60, tx:-4,  ty:0,   tz:0}
+  all:  {yaw:0.42+Math.PI, pitch:0.30, x0:-27.2, x1:20.0},
+  // シャーは出側上方から見る（入側の測長ロールが手前に被らず、刃・クランプ部が正面に来る）
+  shear:{yaw:-0.62,        pitch:0.36, x0:-3.6,  x1:3.4},
+  out:  {yaw:0.55+Math.PI, pitch:0.36, x0:3.5,   x1:19.2},
+  top:  {yaw:Math.PI,      pitch:1.45, x0:-27.2, x1:20.0}   // 横長画面ではラインを横一直線に
+};
+// 縦長画面（スマートフォン）では、ライン全体を画面の縦方向に流して画面を広く使う
+const PRESETS_PORTRAIT = {
+  all:{yaw:Math.PI/2+0.32, pitch:0.78},
+  top:{yaw:Math.PI/2+0.001}
 };
 let camAnim=null;
-const DIST_MAX = 100;   // ズームアウト上限（縦長画面の全体視点も収まるように）
+const DIST_MAX = 120;   // ズームアウト上限（縦長画面の全体視点も収まるように）
+/* 範囲 x0～x1（機器の高さ・幅を含む直方体）が、HUD を避けた画面領域にちょうど収まる距離と注視点を求める */
+const _fitCam = new THREE.PerspectiveCamera();
+function fitView(p){
+  const port = camera.aspect < 1;
+  const top = port?0.60:0.71, bot = port?-0.56:-0.73, lr = 0.86;   // 使える画面領域（NDC）
+  const pts = [];
+  for(const x of [p.x0,(p.x0+p.x1)/2,p.x1]) for(const y of [0,3.4]) for(const z of [-2.6,2.6]) pts.push(new THREE.Vector3(x,y,z));
+  _fitCam.copy(camera);
+  const o = {yaw:p.yaw, pitch:p.pitch, dist:30, tx:(p.x0+p.x1)/2, ty:1.4, tz:0};
+  const ext = ()=>{
+    const cp=Math.cos(o.pitch), sp=Math.sin(o.pitch);
+    _fitCam.position.set(o.tx+o.dist*cp*Math.sin(o.yaw), o.ty+o.dist*sp, o.tz+o.dist*cp*Math.cos(o.yaw));
+    _fitCam.lookAt(o.tx,o.ty,o.tz); _fitCam.updateMatrixWorld();
+    const a=[1e9,-1e9,1e9,-1e9];
+    for(const v of pts){ const q=v.clone().project(_fitCam); a[0]=Math.min(a[0],q.x); a[1]=Math.max(a[1],q.x); a[2]=Math.min(a[2],q.y); a[3]=Math.max(a[3],q.y); }
+    return a;
+  };
+  for(let it=0; it<4; it++){
+    let lo=3, hi=DIST_MAX;                       // 二分探索で収まる最小距離
+    for(let k=0;k<36;k++){
+      o.dist=(lo+hi)/2; const a=ext();
+      if(a[1]-a[0] <= 2*lr && a[3]-a[2] <= top-bot) hi=o.dist; else lo=o.dist;
+    }
+    o.dist=hi;
+    // 画面上の中心ずれを、注視点を地面上で平行移動して補正する
+    const a=ext(), cx=(a[0]+a[1])/2, cy=(a[2]+a[3])/2 - (top+bot)/2;
+    const h=o.dist*Math.tan(_fitCam.fov*Math.PI/360), w=h*_fitCam.aspect, f=h/Math.sin(o.pitch);
+    o.tx += Math.cos(o.yaw)*cx*w - Math.sin(o.yaw)*cy*f;
+    o.tz += -Math.sin(o.yaw)*cx*w - Math.cos(o.yaw)*cy*f;
+  }
+  return o;
+}
 function goPreset(name){
   ui.chkFollow.checked = false;
-  const to = {...PRESETS[name]};
-  // 縦長画面（スマートフォン）では全体系の視点を引いて、ライン全長を画面に収める
-  if((name==='all'||name==='top') && camera.aspect < 1.2) to.dist *= Math.min(1.7, 1.2/camera.aspect);
-  camAnim = {t:0, from:{...cam}, to};
+  const p = {...PRESETS[name], ...(camera.aspect<1 ? PRESETS_PORTRAIT[name] : null)};
+  camAnim = {t:0, from:{...cam}, to:fitView(p)};
 }
 function updateCamera(dt){
   if(camAnim){
@@ -1179,7 +1298,7 @@ function updateCamera(dt){
   if(ui.chkFollow.checked && !camAnim){
     cam.tx += (S.xc-cam.tx)*Math.min(1,dt*6);
     cam.ty += (1.7-cam.ty)*Math.min(1,dt*6);
-    cam.dist += (Math.min(cam.dist,12)-cam.dist)*Math.min(1,dt*3);
+    cam.dist += (Math.min(cam.dist,12*FOV_K)-cam.dist)*Math.min(1,dt*3);
   }
   if(cam.auto && !camAnim) cam.yaw += 0.05*dt;
   const cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
@@ -1213,7 +1332,7 @@ let hoverEq=HOVER_DEFAULT, labelHits=[];
 const UI_FONT='system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif';
 
 /* ---------- オーバーレイ（ラベル・切断フラッシュ・キャリッジ状態） ---------- */
-let Wc=0, Hc=0, dprO=1;
+let Wc=0, Hc=0, dprO=1, mapctlW=0;
 const _pv = new THREE.Vector3();
 function proj(x,y,z){
   _pv.set(x,y,z);
@@ -1234,7 +1353,7 @@ function drawOverlay(){
     octx.beginPath(); octx.moveTo(a[0],a[1]); octx.lineTo(b[0],b[1]); octx.stroke();
     const m=proj(fl.x, PL, 0);
     if(m){
-      const r=(30+90*fl.t)*(9.5/cam.dist);
+      const r=(30+90*fl.t)*(9.5*FOV_K/cam.dist);
       const rg=octx.createRadialGradient(m[0],m[1],0,m[0],m[1],r);
       rg.addColorStop(0,`rgba(255,244,190,${0.7*al})`);
       rg.addColorStop(1,'rgba(255,244,190,0)');
@@ -1246,7 +1365,7 @@ function drawOverlay(){
   const bRect = drawCarriageBadge(false);
   labelHits = [];
   if(!ui.chkLabels.checked){ drawCarriageBadge(true); return; }
-  const far = cam.dist > 24;
+  const far = cam.dist > 24*FOV_K;
   const items = [];
   for(const E of EQUIP){
     const q = proj(...E.lp());
@@ -1260,8 +1379,9 @@ function drawOverlay(){
   const placed = bRect ? [bRect] : [];
   const hit = (a,b)=>a.x<b.x+b.w+3 && b.x<a.x+a.w+3 && a.y<b.y+b.h+3 && b.y<a.y+a.h+3;
   items.sort((a,b)=>(b.big-a.big) || (a.E.k===5?-1:b.E.k===5?1:0) || a.sx-b.sx);
+  const xMax = Wc - mapctlW - 14;   // 右上の視点コントロールにラベルが潜り込まないようにする
   for(const it of items){
-    const x = Math.min(Wc-it.w-4, Math.max(4, it.sx-it.w/2));
+    const x = Math.min(xMax-it.w, Math.max(4, it.sx-it.w/2));
     let r = null;
     for(let lv=0; lv<9 && !r; lv++){
       const c = {x, y:it.sy-24-it.h-lv*(it.h+4), w:it.w, h:it.h};
@@ -1434,7 +1554,7 @@ function focusEquip(k){
   ui.chkFollow.checked=false;
   document.querySelectorAll('.vw').forEach(x=>x.classList.remove('sel'));
   document.querySelectorAll('.eq').forEach(x=>x.classList.toggle('on', +x.dataset.k===k));
-  camAnim={t:0, from:{...cam}, to:{yaw:0.75+Math.PI, pitch:0.32, dist:E.fd, tx:E.fx, ty:1.5, tz:0}};
+  camAnim={t:0, from:{...cam}, to:{yaw:0.75+Math.PI, pitch:0.32, dist:E.fd*FOV_K, tx:E.fx, ty:1.5, tz:0}};
 }
 document.querySelectorAll('.eq').forEach(b=>{
   b.addEventListener('click',()=>focusEquip(+b.dataset.k));
@@ -1500,6 +1620,7 @@ function resize(){
   dprO=Math.min(2,window.devicePixelRatio||1);
   ov.width=Wc*dprO; ov.height=Hc*dprO;
   octx.setTransform(dprO,0,0,dprO,0,0);
+  mapctlW = document.getElementById('mapctl').offsetWidth;
 }
 window.addEventListener('resize',resize);
 new ResizeObserver(resize).observe(cv.parentElement);  // ドック開閉・レイアウト変化にも追従
